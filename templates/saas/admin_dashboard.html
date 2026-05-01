@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}LI_Bot — Admin Panel{% endblock %}
+
+{% block extra_head %}
+<style>
+  .admin-wrap { padding: 28px; }
+
+  /* ── Top stats ── */
+  .admin-stats {
+    display: grid; grid-template-columns: repeat(4,1fr);
+    gap: 1px; background: var(--border);
+    border: 1px solid var(--border); border-radius: 5px;
+    overflow: hidden; margin-bottom: 28px;
+  }
+  .astat { background: var(--surface); padding: 20px 24px; }
+  .astat-label { font-family: var(--mono); font-size: 9px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  .astat-val   { font-family: var(--mono); font-size: 28px; font-weight:600; }
+  .c-accent { color: var(--accent); }
+  .c-green  { color: var(--accent3); }
+  .c-warn   { color: var(--warn); }
+  .c-purple { color: #7c3aed; }
+
+  /* ── Section header ── */
+  .sec-hd {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .sec-title { font-family: var(--mono); font-size: 11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--muted2); }
+  .sec-title em { color: var(--accent); font-style:normal; }
+
+  /* ── Search ── */
+  .search-bar {
+    display: flex; gap: 10px; margin-bottom: 16px;
+  }
+  .search-bar input {
+    flex:1; background: var(--surface); border: 1px solid var(--border2);
+    border-radius: 3px; color: var(--text); font-family: var(--mono);
+    font-size: 12px; padding: 8px 14px; outline: none;
+    transition: border-color .2s;
+  }
+  .search-bar input:focus { border-color: var(--accent); }
+
+  /* ── Users table ── */
+  .users-table {
+    width: 100%; border-collapse: collapse;
+    font-family: var(--mono); font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border2); border-radius: 5px;
+    overflow: hidden;
+  }
+  .users-table th {
+    background: var(--surface2);
+    padding: 10px 14px; text-align: left;
+    font-size: 9px; letter-spacing:.1em; text-transform:uppercase;
+    color: var(--muted2); border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .users-table td {
+    padding: 11px 14px; border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .users-table tr:last-child td { border-bottom: none; }
+  .users-table tr:hover td { background: rgba(255,255,255,.02); }
+
+  .plan-badge {
+    display: inline-flex; align-items: center;
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 10px; font-weight:600; letter-spacing:.06em;
+    border: 1px solid;
+  }
+  .plan-free   { color: var(--muted2);  border-color: var(--border2); background: transparent; }
+  .plan-pro    { color: var(--accent);  border-color: rgba(0,229,255,.3); background: rgba(0,229,255,.06); }
+  .plan-agency { color: #a78bfa; border-color: rgba(167,139,250,.3); background: rgba(167,139,250,.06); }
+  .plan-custom { color: var(--warn);   border-color: rgba(245,158,11,.3); background: rgba(245,158,11,.06); }
+
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 10px; border: 1px solid;
+  }
+  .status-active    { color: var(--accent3); border-color: rgba(16,185,129,.3); background: rgba(16,185,129,.06); }
+  .status-suspended { color: var(--warn);    border-color: rgba(245,158,11,.3);  background: rgba(245,158,11,.06); }
+  .status-cancelled { color: var(--danger);  border-color: rgba(244,63,94,.3);   background: rgba(244,63,94,.06); }
+
+  .user-link { color: var(--accent); text-decoration: none; }
+  .user-link:hover { text-decoration: underline; }
+
+  .usage-bar-wrap { width: 80px; background: var(--border2); border-radius: 999px; height: 4px; display:inline-block; vertical-align:middle; margin-right:6px; }
+  .usage-bar { height:4px; border-radius:999px; background: var(--accent3); transition: width .3s; }
+  .usage-bar.warn { background: var(--warn); }
+  .usage-bar.danger { background: var(--danger); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-wrap">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+    <div>
+      <div style="font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);margin-bottom:4px">
+        <em style="color:var(--accent)">admin</em> &nbsp;// control panel
+      </div>
+      <div style="font-family:var(--mono);font-size:18px;font-weight:600;color:var(--text)">Subscriber Management</div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <a href="/admin-panel/plans/" class="btn btn-ghost">Manage Plans</a>
+      <a href="/admin-panel/plans/new/" class="btn btn-primary">+ New Plan</a>
+    </div>
+  </div>
+
+  <!-- Global stats -->
+  <div class="admin-stats">
+    <div class="astat">
+      <div class="astat-label">// total users</div>
+      <div class="astat-val c-accent">{{ total_users }}</div>
+    </div>
+    <div class="astat">
+      <div class="astat-label">// active subs</div>
+      <div class="astat-val c-green">{{ active_subs }}</div>
+    </div>
+    <div class="astat">
+      <div class="astat-label">// suspended</div>
+      <div class="astat-val c-warn">{{ suspended_subs }}</div>
+    </div>
+    <div class="astat">
+      <div class="astat-label">// total comments</div>
+      <div class="astat-val c-purple">{{ total_comments }}</div>
+    </div>
+  </div>
+
+  <!-- Users table -->
+  <div class="sec-hd">
+    <div class="sec-title"><em>01</em> &nbsp;All Users</div>
+  </div>
+
+  <div class="search-bar">
+    <input type="text" id="userSearch" placeholder="Search by username, email or plan…" oninput="filterUsers(this.value)">
+  </div>
+
+  <table class="users-table" id="usersTable">
+    <thead>
+      <tr>
+        <th>User</th>
+        <th>Email</th>
+        <th>Plan</th>
+        <th>Status</th>
+        <th>Profiles</th>
+        <th>Comments today</th>
+        <th>Bot hrs (month)</th>
+        <th>Joined</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in user_rows %}
+      {% with u=row.user sub=row.sub stats=row.stats %}
+      <tr data-search="{{ u.username|lower }} {{ u.email|lower }} {{ sub.plan.name|lower }}">
+        <td>
+          <a href="/admin-panel/users/{{ u.pk }}/" class="user-link">{{ u.username }}</a>
+        </td>
+        <td style="color:var(--muted)">{{ u.email|default:"—" }}</td>
+        <td>
+          <span class="plan-badge plan-{{ sub.plan.tier }}">{{ sub.plan.name }}</span>
+        </td>
+        <td>
+          <span class="status-badge status-{{ sub.status }}">{{ sub.get_status_display }}</span>
+        </td>
+        <td>
+          {{ stats.profiles }}
+          <span style="color:var(--muted)">/
+            {% if sub.plan.max_profiles == -1 %}∞{% else %}{{ sub.plan.max_profiles }}{% endif %}
+          </span>
+        </td>
+        <td>
+          {% with pct=stats.today_comments|floatformat:0 limit=sub.plan.max_comments_per_day %}
+          {{ stats.today_comments }}
+          {% if limit != -1 %}
+            <span style="color:var(--muted)">/ {{ limit }}</span>
+          {% endif %}
+          {% endwith %}
+        </td>
+        <td>
+          {{ sub.bot_hours_used }}h
+          {% if sub.plan.max_bot_hours_month != -1 %}
+            <span style="color:var(--muted)">/ {{ sub.plan.max_bot_hours_month }}h</span>
+          {% endif %}
+        </td>
+        <td style="color:var(--muted)">{{ u.date_joined|date:"d M Y" }}</td>
+        <td>
+          <a href="/admin-panel/users/{{ u.pk }}/" class="btn btn-ghost" style="padding:4px 10px;font-size:10px">Manage →</a>
+        </td>
+      </tr>
+      {% endwith %}
+      {% empty %}
+      <tr><td colspan="9" style="text-align:center;color:var(--muted);padding:32px">No users yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function filterUsers(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#usersTable tbody tr[data-search]').forEach(row => {
+    row.style.display = row.dataset.search.includes(q) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# Django
+*.sqlite3
+db.sqlite3
+*.log
+*.pot
+*.pyc
+*.pyo
+
+# Environment variables
+.env
+.env.*
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Playwright
+playwright-report/
+test-results/
+
+# Logs and states
+logs/
+states/
+
+# Static/media (if generated)
+staticfiles/
+media/
+
+# Qoder (if not needed in repo)
+.qoder/
+
+# PDF or other docs
+*.pdf
+
+# Node/npm (if used for frontend)
+node_modules/
+
+# Misc
+*.bak
+*.tmp

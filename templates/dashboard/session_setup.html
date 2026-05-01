@@ -1,0 +1,539 @@
+{% extends "base.html" %}
+{% block title %}LI_Bot — Session Setup · {{ profile.label }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .setup-wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 36px 28px 64px;
+  }
+
+  /* ── Page title ── */
+  .page-title {
+    font-family: var(--mono);
+    font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted2); margin-bottom: 6px;
+  }
+  .page-title em { color: var(--accent); font-style: normal; }
+
+  .page-sub {
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+    margin-bottom: 32px; line-height: 1.7;
+  }
+  .page-sub strong { color: var(--text); }
+
+  /* ── Session status badge ── */
+  .session-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-radius: 4px;
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    border: 1px solid; margin-bottom: 28px;
+  }
+  .session-badge.active   { color: var(--accent3); border-color: rgba(16,185,129,.3); background: rgba(16,185,129,.07); }
+  .session-badge.inactive { color: var(--muted2);  border-color: var(--border2);      background: transparent; }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .session-badge.active .badge-dot { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
+
+  /* ── Steps ── */
+  .steps { display: flex; flex-direction: column; gap: 20px; margin-bottom: 36px; }
+
+  .step {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .step-num {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border2);
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    color: var(--accent); flex-shrink: 0;
+  }
+
+  .step-body { padding-top: 6px; }
+
+  .step-title {
+    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    color: var(--text); margin-bottom: 8px;
+  }
+
+  .step-desc {
+    font-family: var(--sans); font-size: 13px; color: var(--muted2);
+    line-height: 1.7; margin-bottom: 12px;
+  }
+  .step-desc strong { color: var(--text); }
+  .step-desc code {
+    font-family: var(--mono); font-size: 12px;
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 3px; padding: 1px 6px; color: var(--accent);
+  }
+
+  /* ── Devtools visual mock ── */
+  .devtools-mock {
+    background: #1a1a2e;
+    border: 1px solid var(--border2);
+    border-radius: 5px;
+    overflow: hidden;
+    font-family: var(--mono);
+    font-size: 11px;
+    margin-top: 10px;
+  }
+
+  .dt-bar {
+    display: flex; gap: 0;
+    background: #111118;
+    border-bottom: 1px solid var(--border);
+  }
+  .dt-tab {
+    padding: 8px 16px; font-size: 11px;
+    color: var(--muted); border-right: 1px solid var(--border);
+  }
+  .dt-tab.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
+
+  .dt-body { padding: 14px 16px; }
+
+  .dt-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 0;
+    border-bottom: 1px solid rgba(255,255,255,.04);
+    padding: 5px 0;
+    align-items: start;
+  }
+  .dt-row:last-child { border-bottom: none; }
+
+  .dt-key   { color: #64748b; font-size: 11px; }
+  .dt-val   { color: var(--text); font-size: 11px; word-break: break-all; line-height: 1.5; }
+  .dt-val.highlight {
+    color: var(--accent);
+    background: rgba(0,229,255,.08);
+    border-radius: 2px;
+    padding: 1px 4px;
+  }
+  .dt-val.copy-hint { color: #10b981; }
+
+  .copy-arrow {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 10px; color: var(--accent3); margin-top: 6px;
+    padding: 4px 8px; border-radius: 3px;
+    border: 1px dashed rgba(16,185,129,.3);
+    background: rgba(16,185,129,.05);
+  }
+
+  .shortcut-row {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;
+  }
+  .kbd {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--mono); font-size: 11px;
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 3px; padding: 4px 8px; color: var(--text);
+  }
+  .kbd-sep { color: var(--muted); font-size: 11px; }
+
+  /* ── Divider ── */
+  .divider {
+    border: none; border-top: 1px solid var(--border);
+    margin: 32px 0;
+  }
+
+  /* ── Cookie form ── */
+  .cookie-form {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+
+  .cookie-form-head {
+    padding: 16px 22px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .cookie-form-title {
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted2);
+  }
+  .cookie-form-title em { color: var(--accent); font-style: normal; }
+
+  .cookie-form-body { padding: 24px 22px; }
+
+  .field-group { margin-bottom: 20px; }
+  .field-label {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted2); margin-bottom: 8px;
+  }
+  .field-required {
+    font-size: 9px; color: var(--danger);
+    border: 1px solid rgba(244,63,94,.3);
+    border-radius: 999px; padding: 1px 6px;
+  }
+  .field-optional {
+    font-size: 9px; color: var(--muted);
+    border: 1px solid var(--border2);
+    border-radius: 999px; padding: 1px 6px;
+  }
+
+  .field-group input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: var(--mono); font-size: 12px;
+    padding: 10px 14px; outline: none;
+    transition: border-color .2s;
+  }
+  .field-group input:focus { border-color: var(--accent); }
+  .field-group input::placeholder { color: var(--muted); }
+  .field-help {
+    font-family: var(--mono); font-size: 10px;
+    color: var(--muted); margin-top: 6px; line-height: 1.5;
+  }
+
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  .cookie-form-foot {
+    padding: 16px 22px;
+    border-top: 1px solid var(--border);
+    background: var(--surface2);
+    display: flex; align-items: center; gap: 12px;
+  }
+
+  /* ── Result banner ── */
+  #resultBanner {
+    display: none;
+    margin-top: 16px;
+    padding: 12px 16px;
+    border-radius: 4px;
+    font-family: var(--mono); font-size: 12px;
+    border: 1px solid;
+  }
+  #resultBanner.ok  { color: var(--accent3); border-color: rgba(16,185,129,.3); background: rgba(16,185,129,.08); }
+  #resultBanner.err { color: var(--danger);  border-color: rgba(244,63,94,.3);  background: rgba(244,63,94,.08); }
+
+  /* ── Warning box ── */
+  .warn-box {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 14px 16px;
+    background: rgba(245,158,11,.06);
+    border: 1px solid rgba(245,158,11,.25);
+    border-radius: 4px;
+    margin-bottom: 28px;
+  }
+  .warn-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .warn-text { font-family: var(--mono); font-size: 11px; color: var(--warn); line-height: 1.7; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="setup-wrap">
+
+  <div class="page-title"><em>session setup</em> &nbsp;· {{ profile.label }}</div>
+  <div class="page-sub">
+    The bot needs a valid LinkedIn session to run.<br>
+    <strong>No password is sent to the server</strong> — you just copy two cookie values from your own browser's DevTools.
+  </div>
+
+  <!-- Current status -->
+  {% if profile.has_session %}
+  <div class="session-badge active">
+    <div class="badge-dot"></div>
+    Session active — bot is ready to run
+  </div>
+  {% else %}
+  <div class="session-badge inactive">
+    <div class="badge-dot"></div>
+    No session — complete the steps below
+  </div>
+  {% endif %}
+
+  <div class="warn-box">
+    <div class="warn-icon">⚠</div>
+    <div class="warn-text">
+      Keep your <code style="color:var(--accent);background:rgba(0,229,255,.08);border-radius:2px;padding:1px 5px">li_at</code> cookie private — it grants full access to your LinkedIn account.<br>
+      Never share it. It expires after ~1 year or when you log out of LinkedIn.
+    </div>
+  </div>
+
+  <!-- Steps -->
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <div class="step-title">Open LinkedIn in your browser</div>
+        <div class="step-desc">
+          Go to <strong>linkedin.com</strong> and make sure you're logged in.
+          You should see your feed.
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <div class="step-title">Open DevTools</div>
+        <div class="step-desc">Press the keyboard shortcut for your browser:</div>
+        <div class="shortcut-row">
+          <span class="kbd">Chrome / Edge</span>
+          <span class="kbd-sep">→</span>
+          <span class="kbd">F12</span>
+          <span class="kbd-sep">or</span>
+          <span class="kbd">⌘ Cmd + Option + I</span>
+          <span class="kbd-sep">(Mac)</span>
+        </div>
+        <div class="shortcut-row" style="margin-top:8px">
+          <span class="kbd">Firefox</span>
+          <span class="kbd-sep">→</span>
+          <span class="kbd">F12</span>
+          <span class="kbd-sep">or</span>
+          <span class="kbd">⌘ Cmd + Option + I</span>
+          <span class="kbd-sep">(Mac)</span>
+        </div>
+        <div class="shortcut-row" style="margin-top:8px">
+          <span class="kbd">Safari</span>
+          <span class="kbd-sep">→</span>
+          <span class="kbd">Enable DevTools in Settings first, then ⌘ Cmd + Option + I</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">Go to the Application tab → Cookies</div>
+        <div class="step-desc">
+          In DevTools, click <strong>Application</strong> (Chrome/Edge) or <strong>Storage</strong> (Firefox)
+          in the top tab bar. Then in the left sidebar expand <strong>Cookies</strong>
+          and click <strong>https://www.linkedin.com</strong>.
+        </div>
+
+        <!-- Devtools mock -->
+        <div class="devtools-mock">
+          <div class="dt-bar">
+            <div class="dt-tab">Elements</div>
+            <div class="dt-tab">Console</div>
+            <div class="dt-tab">Network</div>
+            <div class="dt-tab">Sources</div>
+            <div class="dt-tab active">Application</div>
+          </div>
+          <div style="display:grid;grid-template-columns:160px 1fr;min-height:120px">
+            <div style="border-right:1px solid var(--border);padding:10px 12px;font-size:11px;color:var(--muted)">
+              <div style="color:var(--muted2);margin-bottom:6px">▼ Cookies</div>
+              <div style="color:var(--accent);padding-left:12px;background:rgba(0,229,255,.06);border-radius:2px;padding:3px 6px">https://www.linkedin.com</div>
+            </div>
+            <div class="dt-body">
+              <div class="dt-row" style="font-size:10px;color:var(--muted);padding-bottom:6px">
+                <div>Name</div><div>Value</div>
+              </div>
+              <div class="dt-row">
+                <div class="dt-key">bcookie</div>
+                <div class="dt-val" style="color:var(--muted)">v=2&amp;abc123...</div>
+              </div>
+              <div class="dt-row">
+                <div class="dt-key">bscookie</div>
+                <div class="dt-val" style="color:var(--muted)">v=1&amp;xyz...</div>
+              </div>
+              <div class="dt-row">
+                <div class="dt-key" style="color:var(--accent);font-weight:600">li_at</div>
+                <div class="dt-val highlight">AQE...COPY THIS VALUE...</div>
+              </div>
+              <div class="dt-row">
+                <div class="dt-key">lidc</div>
+                <div class="dt-val" style="color:var(--muted)">b=LB...</div>
+              </div>
+              <div class="dt-row">
+                <div class="dt-key" style="color:var(--accent);font-weight:600">JSESSIONID</div>
+                <div class="dt-val highlight">ajax:1234...COPY THIS VALUE...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <div class="step-title">Find and copy <code>li_at</code></div>
+        <div class="step-desc">
+          In the cookie list, click the row named exactly <code>li_at</code>.
+          The full value appears at the bottom of DevTools (or in the Value column).
+          It's a long string starting with <code>AQE</code>.
+          <strong>Select all of it and copy.</strong>
+        </div>
+        <div class="copy-arrow">↓ paste into the li_at field below</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <div class="step-title">Find and copy <code>JSESSIONID</code></div>
+        <div class="step-desc">
+          Click the row named <code>JSESSIONID</code>. The value usually looks like
+          <code>ajax:XXXXXXXXXXXXXXXX</code>. Copy the full value including the <code>ajax:</code> prefix.
+        </div>
+        <div class="copy-arrow">↓ paste into the JSESSIONID field below</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">6</div>
+      <div class="step-body">
+        <div class="step-title">Paste below and save</div>
+        <div class="step-desc">Fill in the form below and click <strong>Save Session</strong>.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <hr class="divider">
+
+  <!-- Cookie form -->
+  <div class="cookie-form">
+    <div class="cookie-form-head">
+      <div class="cookie-form-title"><em>paste</em> &nbsp;LinkedIn Cookies</div>
+      {% if profile.has_session %}
+      <span style="font-family:var(--mono);font-size:10px;color:var(--accent3)">✓ Session exists — overwrite below</span>
+      {% endif %}
+    </div>
+
+    <div class="cookie-form-body">
+      <div class="field-group">
+        <div class="field-label">
+          li_at
+          <span class="field-required">required</span>
+        </div>
+        <input type="password" id="f_li_at" placeholder="AQEDAxxxxxxxxxxxxxxxxxxxxxxx..." autocomplete="off">
+        <div class="field-help">Main auth token. Long string, usually starts with AQE.</div>
+      </div>
+
+      <div class="field-group">
+        <div class="field-label">
+          JSESSIONID
+          <span class="field-required">required</span>
+        </div>
+        <input type="text" id="f_jsessionid" placeholder='ajax:1234567890123456' autocomplete="off">
+        <div class="field-help">Usually starts with <code style="color:var(--accent)">ajax:</code> followed by digits.</div>
+      </div>
+
+      <div class="field-grid">
+        <div class="field-group">
+          <div class="field-label">
+            lidc <span class="field-optional">optional</span>
+          </div>
+          <input type="text" id="f_lidc" placeholder="b=LB:b=..." autocomplete="off">
+        </div>
+        <div class="field-group">
+          <div class="field-label">
+            li_rm <span class="field-optional">optional</span>
+          </div>
+          <input type="password" id="f_li_rm" placeholder="AQE..." autocomplete="off">
+          <div class="field-help">Remember me token — only present if you checked "Keep me logged in".</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cookie-form-foot">
+      <button class="btn btn-primary" onclick="saveSession()" id="saveBtn">Save Session</button>
+      {% if profile.has_session %}
+      <button class="btn btn-danger" onclick="clearSession()">Clear Existing Session</button>
+      {% endif %}
+      <a href="/profiles/{{ profile.pk }}/" class="btn btn-ghost" style="margin-left:auto">← Back to Profile</a>
+    </div>
+  </div>
+
+  <div id="resultBanner"></div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const PROFILE_ID = {{ profile.pk }};
+
+function getCsrf() {
+  return document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrftoken='))?.split('=')[1]||'';
+}
+
+async function saveSession() {
+  const li_at      = document.getElementById('f_li_at').value.trim();
+  const jsessionid = document.getElementById('f_jsessionid').value.trim();
+  const lidc       = document.getElementById('f_lidc').value.trim();
+  const li_rm      = document.getElementById('f_li_rm').value.trim();
+
+  if (!li_at)      { showResult('li_at is required.', false); return; }
+  if (!jsessionid) { showResult('JSESSIONID is required.', false); return; }
+
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const fd = new FormData();
+  fd.append('li_at',      li_at);
+  fd.append('jsessionid', jsessionid);
+  if (lidc)  fd.append('lidc',  lidc);
+  if (li_rm) fd.append('li_rm', li_rm);
+
+  const res  = await fetch(`/api/profiles/${PROFILE_ID}/session/save/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': getCsrf() },
+    body: fd,
+  });
+  const data = await res.json();
+
+  btn.disabled = false;
+  btn.textContent = 'Save Session';
+  showResult(data.msg, data.ok);
+
+  if (data.ok) {
+    // Clear the fields after success
+    ['f_li_at','f_jsessionid','f_lidc','f_li_rm'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    // Update badge
+    const badge = document.querySelector('.session-badge');
+    if (badge) {
+      badge.className = 'session-badge active';
+      badge.innerHTML = '<div class="badge-dot"></div> Session active — bot is ready to run';
+    }
+  }
+}
+
+async function clearSession() {
+  if (!confirm('Clear the saved session? The bot will not be able to run until you save a new one.')) return;
+  const res  = await fetch(`/api/profiles/${PROFILE_ID}/session/clear/`, {
+    method: 'POST', headers: { 'X-CSRFToken': getCsrf() }
+  });
+  const data = await res.json();
+  showResult(data.msg, data.ok);
+  if (data.ok) {
+    const badge = document.querySelector('.session-badge');
+    if (badge) {
+      badge.className = 'session-badge inactive';
+      badge.innerHTML = '<div class="badge-dot"></div> No session — complete the steps above';
+    }
+  }
+}
+
+function showResult(msg, ok) {
+  const el = document.getElementById('resultBanner');
+  el.textContent = msg;
+  el.className   = ok ? 'ok' : 'err';
+  el.style.display = 'block';
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+</script>
+{% endblock %}

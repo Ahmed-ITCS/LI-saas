@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}LI_Bot — My Subscription{% endblock %}
+
+{% block extra_head %}
+<style>
+  .sub-wrap { max-width:800px; margin:0 auto; padding:36px 28px; }
+  .sub-title { font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted2); margin-bottom:28px; }
+  .sub-title em { color:var(--accent); font-style:normal; }
+
+  /* ── Current plan hero ── */
+  .plan-hero {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 5px; overflow:hidden;
+    margin-bottom: 24px;
+  }
+  .plan-hero-head {
+    padding:20px 24px;
+    display:flex; align-items:center; justify-content:space-between;
+    border-bottom:1px solid var(--border);
+    background: var(--surface2);
+  }
+  .plan-name { font-family:var(--mono); font-size:22px; font-weight:600; }
+  .plan-tier { font-family:var(--mono); font-size:11px; color:var(--muted2); margin-top:3px; }
+
+  .status-pill { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:999px; font-family:var(--mono); font-size:11px; font-weight:600; border:1px solid; }
+  .s-active    { color:var(--accent3); border-color:rgba(16,185,129,.3); background:rgba(16,185,129,.08); }
+  .s-suspended { color:var(--warn);    border-color:rgba(245,158,11,.3);  background:rgba(245,158,11,.08); }
+  .s-cancelled { color:var(--danger);  border-color:rgba(244,63,94,.3);   background:rgba(244,63,94,.08); }
+  .sdot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .s-active .sdot { animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.2} }
+
+  .plan-hero-body { padding:24px; display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+
+  .limit-item { }
+  .limit-label { font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  .limit-values { display:flex; align-items:baseline; gap:6px; margin-bottom:6px; }
+  .limit-used { font-family:var(--mono); font-size:22px; font-weight:600; color:var(--text); }
+  .limit-max  { font-family:var(--mono); font-size:13px; color:var(--muted2); }
+  .limit-bar  { background:var(--border2); border-radius:999px; height:5px; overflow:hidden; }
+  .limit-fill { height:5px; border-radius:999px; background:var(--accent3); transition:width .3s; }
+  .limit-fill.warn   { background:var(--warn); }
+  .limit-fill.danger { background:var(--danger); }
+  .limit-note { font-family:var(--mono); font-size:10px; color:var(--muted); margin-top:4px; }
+
+  /* ── Compare plans ── */
+  .plans-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:8px; }
+  .plan-card {
+    background:var(--surface); border:1px solid var(--border2);
+    border-radius:5px; padding:20px; position:relative;
+    transition:border-color .2s, box-shadow .2s;
+  }
+  .plan-card.current { border-color:rgba(0,229,255,.35); box-shadow:0 0 20px rgba(0,229,255,.06); }
+  .plan-card-name { font-family:var(--mono); font-size:15px; font-weight:600; margin-bottom:4px; }
+  .plan-card-desc { font-family:var(--mono); font-size:10px; color:var(--muted); margin-bottom:16px; line-height:1.6; }
+  .plan-feature { font-family:var(--mono); font-size:11px; color:var(--muted2); padding:5px 0; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; }
+  .plan-feature:last-child { border-bottom:none; }
+  .plan-feature-val { color:var(--text); font-weight:600; }
+  .plan-current-tag {
+    position:absolute; top:12px; right:12px;
+    font-family:var(--mono); font-size:9px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--accent);
+    border:1px solid rgba(0,229,255,.3); background:rgba(0,229,255,.06);
+    padding:2px 8px; border-radius:999px;
+  }
+
+  .contact-box {
+    margin-top:24px; padding:16px 20px;
+    background:rgba(0,229,255,.04);
+    border:1px solid rgba(0,229,255,.12);
+    border-radius:4px;
+    font-family:var(--mono); font-size:12px; color:var(--muted2); line-height:1.7;
+  }
+  .contact-box strong { color:var(--text); }
+
+  /* Suspended warning */
+  .suspended-box {
+    padding:16px 20px; margin-bottom:24px;
+    background:rgba(245,158,11,.06); border:1px solid rgba(245,158,11,.25);
+    border-radius:4px; font-family:var(--mono); font-size:12px; color:var(--warn); line-height:1.7;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sub-wrap">
+  <div class="sub-title"><em>subscription</em> &nbsp;// your plan</div>
+
+  {% if sub.status == 'suspended' %}
+  <div class="suspended-box">
+    ⚠ Your account is suspended. Bot and profile features are disabled. Contact the admin to reactivate.
+  </div>
+  {% elif sub.status == 'cancelled' %}
+  <div class="suspended-box" style="background:rgba(244,63,94,.06);border-color:rgba(244,63,94,.25);color:var(--danger)">
+    ✕ Your subscription is cancelled. Contact the admin to renew.
+  </div>
+  {% endif %}
+
+  <!-- Current plan hero -->
+  <div class="plan-hero">
+    <div class="plan-hero-head">
+      <div>
+        <div class="plan-name">{{ sub.plan.name }}</div>
+        <div class="plan-tier">{{ sub.plan.get_tier_display }} plan{% if sub.plan.description %} · {{ sub.plan.description }}{% endif %}</div>
+      </div>
+      <div class="status-pill s-{{ sub.status }}">
+        <div class="sdot"></div>
+        {{ sub.get_status_display }}
+      </div>
+    </div>
+
+    <div class="plan-hero-body">
+
+      {% with used=sub.comments_today limit=sub.plan.max_comments_per_day %}
+      <div class="limit-item">
+        <div class="limit-label">Comments today</div>
+        <div class="limit-values">
+          <span class="limit-used">{{ used }}</span>
+          <span class="limit-max">/ {% if limit == -1 %}unlimited{% else %}{{ limit }}{% endif %}</span>
+        </div>
+        {% if limit != -1 %}
+        {% widthratio used limit 100 as pct %}
+        <div class="limit-bar"><div class="limit-fill {% if pct > 80 %}danger{% elif pct > 60 %}warn{% endif %}" style="width:{{ pct }}%"></div></div>
+        {% else %}
+        <div class="limit-bar"><div class="limit-fill" style="width:20%"></div></div>
+        {% endif %}
+        <div class="limit-note">Resets at midnight UTC</div>
+      </div>
+      {% endwith %}
+
+      {% with used=sub.bot_hours_used limit=sub.plan.max_bot_hours_month %}
+      <div class="limit-item">
+        <div class="limit-label">Bot hours this month</div>
+        <div class="limit-values">
+          <span class="limit-used">{{ used }}h</span>
+          <span class="limit-max">/ {% if limit == -1 %}unlimited{% else %}{{ limit }}h{% endif %}</span>
+        </div>
+        {% if limit != -1 %}
+        {% widthratio used limit 100 as pct %}
+        <div class="limit-bar"><div class="limit-fill {% if pct > 80 %}danger{% elif pct > 60 %}warn{% endif %}" style="width:{{ pct }}%"></div></div>
+        {% else %}
+        <div class="limit-bar"><div class="limit-fill" style="width:10%"></div></div>
+        {% endif %}
+        <div class="limit-note">Resets on the 1st of each month</div>
+      </div>
+      {% endwith %}
+
+      <div class="limit-item">
+        <div class="limit-label">LinkedIn profiles</div>
+        <div class="limit-values">
+          <span class="limit-used">{{ request.user.linkedin_profiles.count }}</span>
+          <span class="limit-max">/ {% if sub.plan.max_profiles == -1 %}unlimited{% else %}{{ sub.plan.max_profiles }}{% endif %}</span>
+        </div>
+        <div class="limit-note">Saved LinkedIn accounts</div>
+      </div>
+
+      <div class="limit-item">
+        <div class="limit-label">Target profiles (per account)</div>
+        <div class="limit-values">
+          <span class="limit-used" style="font-size:16px">{% if sub.plan.max_targets == -1 %}∞{% else %}{{ sub.plan.max_targets }}{% endif %}</span>
+        </div>
+        <div class="limit-note">People whose posts you can target directly</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Plan comparison -->
+  <div style="font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);margin-bottom:12px">// available plans</div>
+
+  <div class="plans-grid">
+    {% for p in plans %}
+    <div class="plan-card {% if sub.plan.pk == p.pk %}current{% endif %}">
+      {% if sub.plan.pk == p.pk %}<div class="plan-current-tag">Current</div>{% endif %}
+      <div class="plan-card-name">{{ p.name }}</div>
+      <div class="plan-card-desc">{{ p.description|default:"&nbsp;" }}</div>
+      <div class="plan-feature"><span>Profiles</span><span class="plan-feature-val">{% if p.max_profiles == -1 %}∞{% else %}{{ p.max_profiles }}{% endif %}</span></div>
+      <div class="plan-feature"><span>Comments / day</span><span class="plan-feature-val">{% if p.max_comments_per_day == -1 %}∞{% else %}{{ p.max_comments_per_day }}{% endif %}</span></div>
+      <div class="plan-feature"><span>Targets / profile</span><span class="plan-feature-val">{% if p.max_targets == -1 %}∞{% else %}{{ p.max_targets }}{% endif %}</span></div>
+      <div class="plan-feature"><span>Bot hrs / month</span><span class="plan-feature-val">{% if p.max_bot_hours_month == -1 %}∞{% else %}{{ p.max_bot_hours_month }}h{% endif %}</span></div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="contact-box">
+    Want to upgrade or have questions about your plan?<br>
+    <strong>Contact the admin</strong> to get your plan changed — upgrades are applied instantly.
+  </div>
+
+</div>
+{% endblock %}
