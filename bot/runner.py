@@ -23,6 +23,8 @@ django.setup()
 from accounts.models import LinkedInProfile, CommentLog
 from accounts.crypto import decrypt
 
+import linkedin_feed
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 LOG_FILE   = os.environ.get("BOT_LOG_FILE", "bot.log")
 PROFILE_ID = int(os.environ.get("BOT_PROFILE_ID", "0"))
@@ -38,6 +40,30 @@ logging.basicConfig(
     ],
 )
 log = logging.getLogger(__name__)
+
+
+def _truthy_env(name: str, default: str = "false") -> bool:
+    return os.environ.get(name, default).strip().lower() in ("1", "true", "yes", "on")
+
+
+LINKEDIN_HEADLESS = _truthy_env("LINKEDIN_HEADLESS", "true")
+LINKEDIN_WAIT_NETWORK_IDLE = _truthy_env("LINKEDIN_WAIT_NETWORK_IDLE", "true")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
+
+VIEWPORT_W, VIEWPORT_H = 1365, 900
+CHROME_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Safari/537.36"
+)
+_CHROME_ARGS = (
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-blink-features=AutomationControlled",
+    f"--window-size={VIEWPORT_W},{VIEWPORT_H}",
+)
+_ANTIDETECT_INIT = """
+Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+"""
 
 # ── Gemini key rotation ───────────────────────────────────────────────────────
 _gemini_key_idx = 0
@@ -160,7 +186,7 @@ async def generate_comment(post_text: str, persona: str, provider: str) -> str:
             try:
                 client = genai.Client(api_key=key)
                 response = client.models.generate_content(
-                    model="gemini-2.0-flash-lite",
+                    model=GEMINI_MODEL,
                     contents=full_prompt,
                 )
                 comment = response.text.strip()
@@ -194,8 +220,12 @@ async def get_post_text(post) -> str:
         ".feed-shared-update-v2__description .break-words",
         ".feed-shared-text .break-words",
         ".feed-shared-update-v2__description span[dir='ltr']",
+        '[class*="feed-shared-update-v2__description"] .break-words',
+        '[class*="feed-shared-update-v2__description"] span[dir="ltr"]',
+        '[class*="update-components-text"] span[dir="ltr"]',
         ".update-components-text span[dir='ltr']",
         ".feed-shared-inline-show-more-text span[dir='ltr']",
+        '[class*="feed-shared-inline-show-more-text"] span[dir="ltr"]',
     ]
     for sel in selectors:
         try:
@@ -281,7 +311,12 @@ async def _process_post(page, post, urn, min_age, max_age, persona, provider, ma
     await post.scroll_into_view_if_needed()
     await page.wait_for_timeout(500)
 
-    await post.locator('button[aria-label="Comment"]').first.click(timeout=8000)
+    cbtn = post.locator(
+        'button[aria-label="Comment"], '
+        'button[aria-label*="Comment"][aria-expanded], '
+        "button.comments-comment-box__open-button"
+    ).first
+    await cbtn.click(timeout=8000)
     await page.wait_for_timeout(1500)
 
     comment_box = post.locator('div[role="textbox"][contenteditable="true"]').first
@@ -303,6 +338,51 @@ async def _process_post(page, post, urn, min_age, max_age, persona, provider, ma
         return False
 
 
+async def _run_feed_attempt_urn(
+    page,
+    urn: str,
+    min_age: int,
+    max_age: int,
+    persona: str,
+    provider: str,
+    max_cpr: int,
+    commented_this_round: int,
+) -> bool:
+    """Locate post on feed or /feed/update/ permalink, run comment flow, restore feed if needed."""
+    opened_detail = False
+    try:
+        post = await linkedin_feed.scoped_post_for_urn(page, urn)
+        if not await post.count():
+            durl = linkedin_feed.activity_detail_url(urn)
+            log.info(
+                "📎 No hydrated card on feed — opening detail %s…",
+                durl[:88] + ("…" if len(durl) > 88 else ""),
+            )
+            await page.goto(durl, wait_until="domcontentloaded", timeout=75000)
+            await page.wait_for_timeout(2800)
+            opened_detail = True
+            post = await linkedin_feed.scoped_post_on_detail_view(page, urn)
+
+        if not await post.count():
+            log.warning("⏭️  %s… not in DOM — skipping", urn[:50])
+            return False
+
+        return await _process_post(
+            page,
+            post,
+            urn,
+            min_age,
+            max_age,
+            persona,
+            provider,
+            max_cpr,
+            commented_this_round,
+        )
+    finally:
+        if opened_detail:
+            await linkedin_feed.return_to_feed_home(page, linkedin_feed.wait_for_feed_ready)
+
+
 async def _run_targeted(page, profile, persona, provider, min_age, max_age, max_cpr):
     """Visit a specific person's activity page and comment on their posts (one-shot)."""
     log.info("=" * 60)
@@ -310,9 +390,13 @@ async def _run_targeted(page, profile, persona, provider, min_age, max_age, max_
     log.info(f"   URL: {TARGET_URL}")
     log.info("=" * 60)
 
-    await page.goto(TARGET_URL)
+    await page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=75000)
+    await linkedin_feed.dismiss_sticky_alerts(page)
     try:
-        await page.wait_for_selector('div[data-urn^="urn:li:activity:"]', timeout=15000)
+        await page.wait_for_selector(
+            linkedin_feed.URN_TAGS,
+            timeout=20000,
+        )
         log.info("✅ Target activity page loaded")
     except Exception:
         log.error("❌ Could not load target activity page — wrong URL or not logged in")
@@ -320,16 +404,22 @@ async def _run_targeted(page, profile, persona, provider, min_age, max_age, max_
         await page.screenshot(path=f"debug_targeted_{PROFILE_ID}_{ts}.png")
         return
 
-    # Scroll a couple of times to load more posts
+    try:
+        if LINKEDIN_WAIT_NETWORK_IDLE:
+            await page.wait_for_load_state("networkidle", timeout=25000)
+    except Exception:
+        pass
+
+    # Scroll to virtualize additional posts
     for _ in range(3):
         await page.evaluate("window.scrollBy(0, 900)")
         await asyncio.sleep(1.5)
 
-    post_containers = await page.locator('div[data-urn^="urn:li:activity:"]').all()
+    post_containers = await page.locator(linkedin_feed.URN_TAGS).all()
     candidates = []
     seen_urns: set[str] = set()
     for post in post_containers:
-        urn = await post.get_attribute("data-urn")
+        urn = await post.get_attribute("data-urn") or await post.get_attribute("data-activity-urn")
         if urn and not is_already_commented(urn) and urn not in seen_urns:
             seen_urns.add(urn)
             candidates.append((urn, post))
@@ -359,18 +449,13 @@ async def _run_targeted(page, profile, persona, provider, min_age, max_age, max_
 
 
 async def _run_feed(page, profile, persona, provider, min_age, max_age, max_cpr):
-    """Standard mode: continually scan the home feed."""
+    """Standard mode: resilient home-feed URN harvest + optional /feed/update/ fallback."""
     log.info("📡 Navigating to LinkedIn feed")
-    await page.goto("https://www.linkedin.com/feed/")
-
-    try:
-        await page.wait_for_selector('div[data-urn^="urn:li:activity:"]', timeout=15000)
-        log.info("✅ Feed loaded")
-    except Exception:
-        log.error("❌ Feed not found — possibly not logged in or DOM changed")
-        ts = __import__("datetime").datetime.now().strftime("%Y%m%d_%H%M%S")
-        await page.screenshot(path=f"debug_{PROFILE_ID}_{ts}.png")
-        return
+    await linkedin_feed.initial_feed_navigation(
+        page,
+        wait_network_idle=LINKEDIN_WAIT_NETWORK_IDLE,
+        screenshot_path_prefix=f"debug_{PROFILE_ID}",
+    )
 
     round_number = 0
     while True:
@@ -379,26 +464,30 @@ async def _run_feed(page, profile, persona, provider, min_age, max_age, max_cpr)
         log.info(f"🔄 Round #{round_number} — profile '{profile.label}'")
 
         commented_this_round = 0
-        seen_urns: set[str] = set()
 
-        post_containers = await page.locator('div[data-urn^="urn:li:activity:"]').all()
-        candidates = []
-        for post in post_containers:
-            urn = await post.get_attribute("data-urn")
-            if urn and not is_already_commented(urn) and urn not in seen_urns:
-                seen_urns.add(urn)
-                candidates.append((urn, post))
+        all_urns = await linkedin_feed.collect_feed_activity_urns(
+            page,
+            link_wait_network_idle=LINKEDIN_WAIT_NETWORK_IDLE,
+            is_already_commented=is_already_commented,
+        )
 
-        log.info(f"📊 {len(post_containers)} posts visible, {len(candidates)} unseen")
-
-        for urn, post in candidates:
+        for urn in all_urns:
             if commented_this_round >= max_cpr:
                 log.info(f"🛑 Max comments/round reached ({max_cpr})")
                 break
             if is_already_commented(urn):
                 continue
             try:
-                posted = await _process_post(page, post, urn, min_age, max_age, persona, provider, max_cpr, commented_this_round)
+                posted = await _run_feed_attempt_urn(
+                    page,
+                    urn,
+                    min_age,
+                    max_age,
+                    persona,
+                    provider,
+                    max_cpr,
+                    commented_this_round,
+                )
                 if posted:
                     commented_this_round += 1
                     wait_secs = random.uniform(18, 38)
@@ -413,6 +502,14 @@ async def _run_feed(page, profile, persona, provider, min_age, max_age, max_cpr)
         await asyncio.sleep(random.randint(25, 45))
         log.info("😴 Sleeping 30 minutes before next round...")
         await asyncio.sleep(30 * 60)
+
+        log.info("🔄 Refreshing feed page...")
+        await page.goto(linkedin_feed.FEED_HOME, wait_until="domcontentloaded", timeout=90000)
+        try:
+            await linkedin_feed.wait_for_feed_ready(page)
+            log.info("✅ Feed refreshed successfully")
+        except Exception:
+            log.error("❌ Feed reload failed — will retry next round")
 
 
 async def run():
@@ -441,35 +538,48 @@ async def run():
     log.info(f"   Post age range: {min_age}–{max_age} min")
     log.info(f"   Max/round     : {max_cpr}")
     log.info(f"   Gemini keys   : {len(_gemini_keys)}")
+    if provider == "gemini":
+        log.info(f"   Gemini model  : {GEMINI_MODEL}")
+    log.info("   Chromium      : %s (trimmed automation fingerprints)", "headless" if LINKEDIN_HEADLESS else "headed")
+    if LINKEDIN_WAIT_NETWORK_IDLE:
+        log.info("   Feed settle   : waits for networkidle after /feed/")
     log.info("=" * 60)
 
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage"],
-        )
+        launch_kw: dict = {
+            "headless": LINKEDIN_HEADLESS,
+            "args": list(_CHROME_ARGS),
+            "ignore_default_args": ["--enable-automation"],
+        }
+        chrome_ch = os.environ.get("LINKEDIN_CHROME_CHANNEL", "").strip()
+        if chrome_ch:
+            launch_kw["channel"] = chrome_ch
+        browser = await p.chromium.launch(**launch_kw)
 
-        UA = (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
+        _ctx_kw = dict(
+            viewport={"width": VIEWPORT_W, "height": VIEWPORT_H},
+            user_agent=CHROME_USER_AGENT,
+            locale="en-US",
+            timezone_id=os.environ.get("LINKEDIN_TZ", "UTC"),
+            permissions=["notifications"],
+            java_script_enabled=True,
         )
 
         if os.path.exists(STATE_FILE):
             context = await browser.new_context(
                 storage_state=STATE_FILE,
-                viewport={"width": 1280, "height": 800},
-                user_agent=UA,
+                **_ctx_kw,
             )
+            await context.add_init_script(_ANTIDETECT_INIT)
             log.info("✅ Loaded saved LinkedIn session")
         else:
             log.warning("⚠️  No session file found — attempting login (may fail on headless)")
             context = await browser.new_context(
-                viewport={"width": 1280, "height": 800},
-                user_agent=UA,
+                **_ctx_kw,
             )
+            await context.add_init_script(_ANTIDETECT_INIT)
             page = await context.new_page()
             await page.goto("https://www.linkedin.com/login")
             await page.fill('input[name="session_key"]', email)
