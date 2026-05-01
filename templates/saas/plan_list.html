@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}LI_Bot — Plans{% endblock %}
+{% block content %}
+<div style="padding:28px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+    <div style="font-family:var(--mono);font-size:14px;font-weight:600">Subscription Plans</div>
+    <div style="display:flex;gap:10px">
+      <a href="/admin-panel/" class="btn btn-ghost">← Admin</a>
+      <a href="/admin-panel/plans/new/" class="btn btn-primary">+ New Plan</a>
+    </div>
+  </div>
+
+  <table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;background:var(--surface);border:1px solid var(--border2);border-radius:5px;overflow:hidden">
+    <thead>
+      <tr style="background:var(--surface2)">
+        <th style="padding:10px 14px;text-align:left;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border)">Name</th>
+        <th style="padding:10px 14px;text-align:left;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border)">Tier</th>
+        <th style="padding:10px 14px;text-align:left;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border)">Profiles</th>
+        <th style="padding:10px 14px;text-align:left;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border)">Comments/day</th>
+        <th style="padding:10px 14px;text-align:left;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border)">Targets</th>
+        <th style="padding:10px 14px;text-align:left;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border)">Bot hrs/mo</th>
+        <th style="padding:10px 14px;text-align:left;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border)">Subscribers</th>
+        <th style="padding:10px 14px;text-align:left;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border)">Status</th>
+        <th style="padding:10px 14px;text-align:left;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border)">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in plans %}
+      <tr>
+        <td style="padding:11px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text)">{{ p.name }}</td>
+        <td style="padding:11px 14px;border-bottom:1px solid var(--border);color:var(--accent)">{{ p.get_tier_display }}</td>
+        <td style="padding:11px 14px;border-bottom:1px solid var(--border)">{% if p.max_profiles == -1 %}∞{% else %}{{ p.max_profiles }}{% endif %}</td>
+        <td style="padding:11px 14px;border-bottom:1px solid var(--border)">{% if p.max_comments_per_day == -1 %}∞{% else %}{{ p.max_comments_per_day }}{% endif %}</td>
+        <td style="padding:11px 14px;border-bottom:1px solid var(--border)">{% if p.max_targets == -1 %}∞{% else %}{{ p.max_targets }}{% endif %}</td>
+        <td style="padding:11px 14px;border-bottom:1px solid var(--border)">{% if p.max_bot_hours_month == -1 %}∞{% else %}{{ p.max_bot_hours_month }}h{% endif %}</td>
+        <td style="padding:11px 14px;border-bottom:1px solid var(--border);color:var(--accent3)">{{ p.sub_count }}</td>
+        <td style="padding:11px 14px;border-bottom:1px solid var(--border)">
+          {% if p.is_active %}<span style="color:var(--accent3)">Active</span>{% else %}<span style="color:var(--muted)">Inactive</span>{% endif %}
+        </td>
+        <td style="padding:11px 14px;border-bottom:1px solid var(--border)">
+          <div style="display:flex;gap:6px">
+            <a href="/admin-panel/plans/{{ p.pk }}/edit/" class="btn btn-ghost" style="padding:4px 10px;font-size:10px">Edit</a>
+            {% if p.sub_count == 0 %}
+            <form method="post" action="/admin-panel/plans/{{ p.pk }}/delete/" style="display:inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-danger" style="padding:4px 10px;font-size:10px" onclick="return confirm('Delete plan?')">Delete</button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="9" style="padding:32px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px">No plans yet. <a href="/admin-panel/plans/new/" style="color:var(--accent)">Create one →</a></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

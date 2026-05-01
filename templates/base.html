@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}LI_Bot{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0a0a0f;
+    --surface:  #0f0f17;
+    --surface2: #13131d;
+    --border:   #1a1a2a;
+    --border2:  #222235;
+    --accent:   #00e5ff;
+    --accent2:  #7c3aed;
+    --accent3:  #10b981;
+    --danger:   #f43f5e;
+    --warn:     #f59e0b;
+    --text:     #e2e8f0;
+    --muted:    #475569;
+    --muted2:   #64748b;
+    --mono:     'IBM Plex Mono', monospace;
+    --sans:     'IBM Plex Sans', sans-serif;
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,.018) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Nav ── */
+  nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 28px;
+    height: 54px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    flex-shrink: 0;
+  }
+
+  .nav-left { display: flex; align-items: center; gap: 20px; }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .logo em { color: var(--accent); font-style: normal; }
+
+  .nav-link {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted2);
+    text-decoration: none;
+    letter-spacing: .06em;
+    transition: color .2s;
+  }
+  .nav-link:hover { color: var(--accent); }
+
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+
+  .nav-user {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: .06em;
+  }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid;
+    transition: all .2s;
+    text-decoration: none;
+  }
+
+  .btn-primary { color: var(--accent);  border-color: rgba(0,229,255,.35); background: rgba(0,229,255,.06); }
+  .btn-primary:hover { background: rgba(0,229,255,.14); box-shadow: 0 0 16px rgba(0,229,255,.12); }
+
+  .btn-start { color: var(--accent3); border-color: rgba(16,185,129,.35); background: rgba(16,185,129,.06); }
+  .btn-start:hover { background: rgba(16,185,129,.15); box-shadow: 0 0 16px rgba(16,185,129,.12); }
+
+  .btn-stop { color: var(--danger); border-color: rgba(244,63,94,.35); background: rgba(244,63,94,.06); }
+  .btn-stop:hover { background: rgba(244,63,94,.15); box-shadow: 0 0 16px rgba(244,63,94,.12); }
+
+  .btn-ghost { color: var(--muted2); border-color: var(--border2); background: transparent; }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+  .btn-danger { color: var(--danger); border-color: rgba(244,63,94,.35); background: transparent; }
+  .btn-danger:hover { background: rgba(244,63,94,.1); }
+
+  .btn:disabled { opacity: .35; cursor: default; pointer-events: none; }
+
+  /* ── Main content ── */
+  main {
+    flex: 1;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── Messages / Toast ── */
+  .messages {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .message {
+    padding: 12px 18px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 12px;
+    border: 1px solid;
+    animation: slideIn .25s ease;
+  }
+
+  .message.success { background: rgba(16,185,129,.1); border-color: rgba(16,185,129,.3); color: var(--accent3); }
+  .message.error   { background: rgba(244,63,94,.1);  border-color: rgba(244,63,94,.3);  color: var(--danger); }
+  .message.warning { background: rgba(245,158,11,.1); border-color: rgba(245,158,11,.3); color: var(--warn); }
+  .message.info    { background: rgba(0,229,255,.08); border-color: rgba(0,229,255,.25); color: var(--accent); }
+
+  @keyframes slideIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: none; } }
+
+  /* ── Toast (JS) ── */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    padding: 12px 18px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 12px;
+    border: 1px solid;
+    z-index: 9999;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity .25s, transform .25s;
+    pointer-events: none;
+  }
+  #toast.show { opacity: 1; transform: none; }
+  #toast.ok  { background: rgba(16,185,129,.1); border-color: rgba(16,185,129,.3); color: var(--accent3); }
+  #toast.err { background: rgba(244,63,94,.1);  border-color: rgba(244,63,94,.3);  color: var(--danger); }
+
+  /* ── Forms ── */
+  .form-group { margin-bottom: 20px; }
+  .form-group label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted2);
+    margin-bottom: 8px;
+  }
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .form-group input:focus,
+  .form-group textarea:focus,
+  .form-group select:focus { border-color: var(--accent); }
+  .form-group textarea { resize: vertical; }
+  .form-group select option { background: var(--surface2); }
+  .form-group .help { font-size: 11px; color: var(--muted); margin-top: 5px; font-family: var(--mono); }
+  .form-group .errors { font-size: 11px; color: var(--danger); margin-top: 5px; font-family: var(--mono); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .checkbox-group { display: flex; align-items: center; gap: 10px; }
+  .checkbox-group input[type="checkbox"] { width: auto; accent-color: var(--accent3); }
+
+  /* ── Section header ── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted2);
+  }
+  .section-title em { color: var(--accent); font-style: normal; }
+
+  /* ── Scrollbars ── */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+
+{% if user.is_authenticated %}
+<nav>
+  <div class="nav-left">
+    <a href="/" class="logo">LI<em>_</em>Bot</a>
+    <a href="/" class="nav-link">// dashboard</a>
+    <a href="/profiles/new/" class="nav-link">// + profile</a>
+    <a href="/subscription/" class="nav-link">// subscription</a>
+    {% if user.is_staff %}
+    <a href="/admin-panel/" class="nav-link" style="color:var(--warn)">// admin</a>
+    {% endif %}
+  </div>
+  <div class="nav-right">
+    {% if not user.is_staff %}
+    {% with sub=user.subscription %}
+    <span style="font-family:var(--mono);font-size:10px;color:var(--muted);border:1px solid var(--border2);border-radius:999px;padding:3px 10px">
+      {{ sub.plan.name }}
+    </span>
+    {% endwith %}
+    {% endif %}
+    <span class="nav-user">{{ user.username }}</span>
+    <a href="/accounts/logout/" class="btn btn-ghost">Logout</a>
+  </div>
+</nav>
+{% endif %}
+
+<main>
+  {% block content %}{% endblock %}
+</main>
+
+{% if messages %}
+<div class="messages" id="msgContainer">
+  {% for msg in messages %}
+  <div class="message {{ msg.tags }}">{{ msg }}</div>
+  {% endfor %}
+</div>
+<script>
+  setTimeout(() => {
+    const el = document.getElementById('msgContainer');
+    if (el) el.style.opacity = '0';
+  }, 3500);
+</script>
+{% endif %}
+
+<div id="toast"></div>
+
+<script>
+function toast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = '', 3200);
+}
+</script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

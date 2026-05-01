@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}LI_Bot — {{ u.username }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .ud-wrap { padding:28px; max-width:1100px; }
+  .ud-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; }
+  .ud-name { font-family:var(--mono); font-size:20px; font-weight:600; }
+  .ud-email { font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:4px; }
+
+  .ud-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px; }
+
+  .ud-card { background:var(--surface); border:1px solid var(--border2); border-radius:5px; overflow:hidden; }
+  .ud-card-head { padding:12px 18px; border-bottom:1px solid var(--border); background:var(--surface2); font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--muted2); }
+  .ud-card-head em { color:var(--accent); font-style:normal; }
+  .ud-card-body { padding:18px; }
+
+  .stat-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); }
+  .stat-row:last-child { border-bottom:none; }
+  .stat-key { font-family:var(--mono); font-size:11px; color:var(--muted2); }
+  .stat-val { font-family:var(--mono); font-size:13px; font-weight:600; color:var(--text); }
+  .stat-val.green  { color:var(--accent3); }
+  .stat-val.accent { color:var(--accent); }
+  .stat-val.warn   { color:var(--warn); }
+
+  .plan-badge { display:inline-flex; align-items:center; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600; border:1px solid; }
+  .plan-free   { color:var(--muted2); border-color:var(--border2); }
+  .plan-pro    { color:var(--accent); border-color:rgba(0,229,255,.3); background:rgba(0,229,255,.06); }
+  .plan-agency { color:#a78bfa; border-color:rgba(167,139,250,.3); background:rgba(167,139,250,.06); }
+  .plan-custom { color:var(--warn); border-color:rgba(245,158,11,.3); background:rgba(245,158,11,.06); }
+
+  .status-badge { display:inline-flex; padding:3px 10px; border-radius:999px; font-size:11px; border:1px solid; }
+  .status-active    { color:var(--accent3); border-color:rgba(16,185,129,.3); background:rgba(16,185,129,.06); }
+  .status-suspended { color:var(--warn);    border-color:rgba(245,158,11,.3); background:rgba(245,158,11,.06); }
+  .status-cancelled { color:var(--danger);  border-color:rgba(244,63,94,.3);  background:rgba(244,63,94,.06); }
+
+  .assign-form select, .assign-form textarea {
+    width:100%; background:var(--surface2); border:1px solid var(--border2);
+    border-radius:3px; color:var(--text); font-family:var(--mono);
+    font-size:12px; padding:9px 12px; outline:none; margin-bottom:10px;
+    transition:border-color .2s;
+  }
+  .assign-form select:focus, .assign-form textarea:focus { border-color:var(--accent); }
+  .assign-form select option { background:var(--surface2); }
+
+  .action-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+
+  /* Usage bar */
+  .ubar-wrap { background:var(--border2); border-radius:999px; height:6px; margin-top:6px; overflow:hidden; }
+  .ubar { height:6px; border-radius:999px; background:var(--accent3); }
+  .ubar.warn   { background:var(--warn); }
+  .ubar.danger { background:var(--danger); }
+
+  /* Profiles mini list */
+  .profile-row { display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border); }
+  .profile-row:last-child { border-bottom:none; }
+  .profile-dot { width:6px; height:6px; border-radius:50%; background:var(--muted); margin-right:10px; flex-shrink:0; }
+  .profile-dot.running { background:var(--accent3); box-shadow:0 0 5px var(--accent3); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ud-wrap">
+
+  <div class="ud-header">
+    <div>
+      <div class="ud-name">{{ u.username }}</div>
+      <div class="ud-email">{{ u.email|default:"no email" }} · joined {{ u.date_joined|date:"d M Y" }}</div>
+    </div>
+    <a href="/admin-panel/" class="btn btn-ghost">← Admin Panel</a>
+  </div>
+
+  <div class="ud-grid">
+
+    <!-- Current subscription -->
+    <div class="ud-card">
+      <div class="ud-card-head"><em>01</em> &nbsp;Subscription</div>
+      <div class="ud-card-body">
+        <div class="stat-row">
+          <span class="stat-key">Plan</span>
+          <span class="stat-val"><span class="plan-badge plan-{{ sub.plan.tier }}">{{ sub.plan.name }}</span></span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-key">Status</span>
+          <span class="stat-val"><span class="status-badge status-{{ sub.status }}">{{ sub.get_status_display }}</span></span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-key">Started</span>
+          <span class="stat-val">{{ sub.started_at|date:"d M Y" }}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-key">Profiles</span>
+          <span class="stat-val accent">{{ stats.profiles }} / {% if sub.plan.max_profiles == -1 %}∞{% else %}{{ sub.plan.max_profiles }}{% endif %}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-key">Comments today</span>
+          <span class="stat-val green">{{ stats.today_comments }} / {% if sub.plan.max_comments_per_day == -1 %}∞{% else %}{{ sub.plan.max_comments_per_day }}{% endif %}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-key">Bot hours this month</span>
+          <span class="stat-val warn">{{ sub.bot_hours_used }}h / {% if sub.plan.max_bot_hours_month == -1 %}∞{% else %}{{ sub.plan.max_bot_hours_month }}h{% endif %}</span>
+        </div>
+        {% if sub.plan.max_bot_hours_month != -1 %}
+        <div class="ubar-wrap" style="margin-top:8px">
+          {% widthratio sub.bot_hours_used sub.plan.max_bot_hours_month 100 as pct %}
+          <div class="ubar {% if pct > 80 %}danger{% elif pct > 60 %}warn{% endif %}" style="width:{{ pct }}%"></div>
+        </div>
+        {% endif %}
+        {% if sub.notes %}
+        <div style="margin-top:12px;font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.6">{{ sub.notes }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Assign plan -->
+    <div class="ud-card">
+      <div class="ud-card-head"><em>02</em> &nbsp;Manage</div>
+      <div class="ud-card-body">
+
+        <form method="post" action="/admin-panel/users/{{ u.pk }}/assign/" class="assign-form">
+          {% csrf_token %}
+          <div style="font-family:var(--mono);font-size:10px;color:var(--muted2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.1em">Assign Plan</div>
+          <select name="plan_id">
+            {% for p in plans %}
+            <option value="{{ p.pk }}" {% if sub.plan.pk == p.pk %}selected{% endif %}>
+              {{ p.name }} ({{ p.get_tier_display }})
+            </option>
+            {% endfor %}
+          </select>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--muted2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.1em">Admin Notes</div>
+          <textarea name="notes" rows="2" placeholder="Optional internal notes…">{{ sub.notes }}</textarea>
+          <button type="submit" class="btn btn-primary" style="width:100%">Assign Plan</button>
+        </form>
+
+        <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--muted2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.1em">Set Status</div>
+          <div class="action-row">
+            <form method="post" action="/admin-panel/users/{{ u.pk }}/status/">
+              {% csrf_token %}<input type="hidden" name="status" value="active">
+              <button type="submit" class="btn btn-start" style="padding:6px 12px;font-size:10px">Activate</button>
+            </form>
+            <form method="post" action="/admin-panel/users/{{ u.pk }}/status/">
+              {% csrf_token %}<input type="hidden" name="status" value="suspended">
+              <button type="submit" class="btn btn-stop" style="padding:6px 12px;font-size:10px">Suspend</button>
+            </form>
+            <form method="post" action="/admin-panel/users/{{ u.pk }}/status/">
+              {% csrf_token %}<input type="hidden" name="status" value="cancelled">
+              <button type="submit" class="btn btn-danger" style="padding:6px 12px;font-size:10px">Cancel</button>
+            </form>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--muted2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.1em">Usage</div>
+          <form method="post" action="/admin-panel/users/{{ u.pk }}/reset-usage/">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-ghost" style="font-size:10px;padding:6px 12px" onclick="return confirm('Reset bot usage for this month?')">
+              ↺ Reset Bot Hours
+            </button>
+          </form>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- LinkedIn Profiles -->
+  <div class="ud-card">
+    <div class="ud-card-head"><em>03</em> &nbsp;LinkedIn Profiles ({{ profiles|length }})</div>
+    <div class="ud-card-body" style="padding:0 18px">
+      {% for p in profiles %}
+      <div class="profile-row">
+        <div style="display:flex;align-items:center;flex:1;min-width:0">
+          <div class="profile-dot {% if p.is_running %}running{% endif %}"></div>
+          <div>
+            <div style="font-family:var(--mono);font-size:12px;color:var(--text)">{{ p.label }}</div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--muted)">
+              {{ p.comment_logs.count }} comments · {{ p.targets.count }} targets
+              {% if p.is_running %}<span style="color:var(--accent3)"> · running</span>{% endif %}
+            </div>
+          </div>
+        </div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--muted)">{{ p.created_at|date:"d M Y" }}</div>
+      </div>
+      {% empty %}
+      <div style="padding:24px;text-align:center;font-family:var(--mono);font-size:12px;color:var(--muted)">No profiles yet.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

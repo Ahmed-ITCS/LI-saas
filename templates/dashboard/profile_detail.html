@@ -1,0 +1,449 @@
+{% extends "base.html" %}
+{% block title %}LI_Bot — {{ profile.label }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .detail-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 28px; border-bottom: 1px solid var(--border);
+    background: var(--surface); flex-shrink: 0;
+  }
+  .detail-title-col { display: flex; align-items: center; gap: 14px; }
+  .detail-name { font-family: var(--mono); font-size: 15px; font-weight: 600; }
+  .detail-sub  { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 3px; }
+  .status-pill {
+    display: flex; align-items: center; gap: 6px; padding: 4px 10px;
+    border-radius: 999px; font-family: var(--mono); font-size: 10px;
+    font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+    border: 1px solid; transition: all .3s;
+  }
+  .status-pill.running { color: var(--accent3); border-color: rgba(16,185,129,.3); background: rgba(16,185,129,.08); }
+  .status-pill.stopped { color: var(--muted2);  border-color: var(--border2); }
+  .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .status-pill.running .pill-dot { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.2} }
+  .detail-actions { display: flex; gap: 8px; }
+
+  .mini-stats {
+    display: grid; grid-template-columns: repeat(4,1fr);
+    gap: 1px; background: var(--border);
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .mstat { background: var(--surface); padding: 14px 22px; }
+  .mstat-label { font-family: var(--mono); font-size: 9px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:5px; }
+  .mstat-val   { font-family: var(--mono); font-size: 20px; font-weight: 600; }
+  .c-green  { color: var(--accent3); }
+  .c-accent { color: var(--accent); }
+  .c-warn   { color: var(--warn); }
+  .c-sm     { font-size: 13px !important; padding-top: 4px; color: var(--muted2); }
+
+  /* ── Tabs ── */
+  .tab-bar {
+    display: flex; gap: 2px; padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface); flex-shrink: 0;
+  }
+  .tab-btn {
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase;
+    padding: 12px 18px; cursor: pointer; border: none;
+    background: transparent; color: var(--muted2);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color .2s, border-color .2s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-pill {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px; border-radius: 999px; padding: 0 5px;
+    background: rgba(0,229,255,.12); color: var(--accent);
+    font-size: 9px; margin-left: 6px;
+  }
+
+  .tab-panels { flex: 1; min-height: 0; overflow: hidden; }
+  .tab-panel  { display: none; height: 100%; flex-direction: column; }
+  .tab-panel.active { display: flex; }
+
+  /* ── Log panel ── */
+  .log-toolbar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    background: var(--surface2); flex-shrink: 0;
+  }
+  .search-wrap { position: relative; flex: 1; min-width: 160px; }
+  .search-wrap input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border2);
+    border-radius: 3px; color: var(--text); font-family: var(--mono);
+    font-size: 12px; padding: 7px 12px 7px 28px; outline: none;
+    transition: border-color .2s;
+  }
+  .search-wrap input:focus { border-color: var(--accent); }
+  .search-wrap .si { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px; pointer-events: none; }
+  .search-count { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
+  .toggle-label {
+    display: flex; align-items: center; gap: 6px; white-space: nowrap;
+    font-family: var(--mono); font-size: 10px; color: var(--muted2);
+    cursor: pointer; user-select: none;
+  }
+  .toggle-label input { display: none; }
+  .toggle-track {
+    width: 26px; height: 13px; border-radius: 999px;
+    background: var(--border2); position: relative; transition: background .2s;
+  }
+  .toggle-label input:checked ~ .toggle-track { background: var(--accent3); }
+  .toggle-track::after {
+    content:''; position:absolute; top:2px; left:2px;
+    width:9px; height:9px; border-radius:50%;
+    background:#fff; transition:transform .2s;
+  }
+  .toggle-label input:checked ~ .toggle-track::after { transform: translateX(13px); }
+
+  .log-body {
+    flex: 1; overflow-y: auto; padding: 10px 14px;
+    font-family: var(--mono); font-size: 12px; line-height: 1.85; min-height: 0;
+  }
+  .log-body::-webkit-scrollbar { width: 4px; }
+  .log-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  .log-line { display: block; padding: 1px 0; }
+  .log-line:hover { background: rgba(255,255,255,.02); }
+  .log-info  { color: var(--text); }
+  .log-warn  { color: var(--warn); }
+  .log-error { color: var(--danger); }
+  .log-ok    { color: var(--accent3); }
+  .log-bot   { color: var(--accent); }
+  mark { background: rgba(0,229,255,.22); color: var(--accent); border-radius: 2px; }
+
+  /* ── Pane header (shared) ── */
+  .pane-hd {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    background: var(--surface2); flex-shrink: 0;
+  }
+  .pane-title { font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing:.12em; text-transform:uppercase; color:var(--muted2); }
+  .pane-title em { color: var(--accent); font-style: normal; }
+
+  /* ── Comments ── */
+  .scroll-body { flex: 1; overflow-y: auto; min-height: 0; }
+  .scroll-body::-webkit-scrollbar { width: 4px; }
+  .scroll-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  .comment-item { padding: 14px 18px; border-bottom: 1px solid var(--border); transition: background .15s; }
+  .comment-item:hover { background: var(--surface); }
+  .comment-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+  .comment-time { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .comment-age  { font-family: var(--mono); font-size: 10px; color: var(--warn); }
+  .comment-text { font-size: 12px; color: var(--accent); font-style: italic; margin-bottom: 6px; line-height: 1.5; font-family: var(--mono); }
+  .comment-post { font-size: 11px; color: var(--muted2); line-height: 1.5; overflow: hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+
+  /* ── Targets ── */
+  .targets-add { padding: 16px 18px; border-bottom: 1px solid var(--border); background: var(--surface2); flex-shrink: 0; }
+  .targets-add-lbl { font-family: var(--mono); font-size: 10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted2); margin-bottom: 10px; }
+  .targets-add-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .targets-add-row input {
+    flex: 1; min-width: 160px; background: var(--bg); border: 1px solid var(--border2);
+    border-radius: 3px; color: var(--text); font-family: var(--mono);
+    font-size: 12px; padding: 8px 12px; outline: none; transition: border-color .2s;
+  }
+  .targets-add-row input:focus { border-color: var(--accent); }
+  .targets-add-row input::placeholder { color: var(--muted); }
+  .targets-hint { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
+  .targets-hint em { color: var(--warn); font-style: normal; }
+
+  .target-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 18px; border-bottom: 1px solid var(--border); transition: background .15s;
+  }
+  .target-item:hover { background: var(--surface); }
+  .target-item.inactive { opacity: .45; }
+  .tgt-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent3); flex-shrink: 0; }
+  .target-item.inactive .tgt-dot { background: var(--muted); }
+  .tgt-info { flex: 1; min-width: 0; }
+  .tgt-label { font-family: var(--mono); font-size: 12px; color: var(--text); margin-bottom: 2px; }
+  .tgt-url   { font-family: var(--mono); font-size: 10px; color: var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tgt-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .tgt-actions .btn { padding: 5px 10px; font-size: 9px; }
+  .btn-run { color: var(--accent3); border-color: rgba(16,185,129,.35); background: rgba(16,185,129,.06); }
+  .btn-run:hover { background: rgba(16,185,129,.15); }
+  .btn-tog { color: var(--muted2); border-color: var(--border2); background: transparent; }
+  .btn-tog:hover { color: var(--text); }
+  .btn-del { color: var(--danger); border-color: rgba(244,63,94,.3); background: transparent; }
+  .btn-del:hover { background: rgba(244,63,94,.08); }
+
+  .empty-state { padding: 48px 20px; text-align: center; font-family: var(--mono); font-size: 12px; color: var(--muted); line-height: 2; }
+
+  /* ── Page shell ── */
+  .page-body { display: flex; flex-direction: column; height: calc(100vh - 54px); overflow: hidden; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-body">
+
+  <!-- Header -->
+  <div class="detail-header">
+    <div class="detail-title-col">
+      <div>
+        <div class="detail-name">{{ profile.label }}</div>
+        <div class="detail-sub">{{ profile.get_llm_provider_display }} · age {{ profile.min_post_age_minutes }}–{{ profile.max_post_age_minutes }}m · max {{ profile.max_comments_per_round }}/round · {% if profile.run_parallel %}parallel{% else %}sequential{% endif %}</div>
+      </div>
+      <div class="status-pill {% if profile.is_running %}running{% else %}stopped{% endif %}" id="statusPill">
+        <div class="pill-dot"></div>
+        <span id="statusTxt">{% if profile.is_running %}Running{% else %}Stopped{% endif %}</span>
+      </div>
+    </div>
+    <div class="detail-actions">
+      <button class="btn btn-start" id="btnStart" onclick="botAction('start')" {% if profile.is_running %}disabled{% endif %}>▶ Start</button>
+      <button class="btn btn-stop"  id="btnStop"  onclick="botAction('stop')"  {% if not profile.is_running %}disabled{% endif %}>■ Stop</button>
+      <a href="/profiles/{{ profile.pk }}/session/" class="btn {% if not profile.has_session %}btn-stop{% else %}btn-ghost{% endif %}" title="LinkedIn Session">{% if not profile.has_session %}⚠ Session{% else %}✓ Session{% endif %}</a>
+      <a href="/profiles/{{ profile.pk }}/edit/" class="btn btn-ghost">Edit</a>
+      <a href="/" class="btn btn-ghost">← Back</a>
+    </div>
+  </div>
+
+  <!-- Mini stats -->
+  <div class="mini-stats">
+    <div class="mstat"><div class="mstat-label">// total comments</div><div class="mstat-val c-accent" id="ms-total">—</div></div>
+    <div class="mstat"><div class="mstat-label">// today</div><div class="mstat-val c-green" id="ms-today">—</div></div>
+    <div class="mstat"><div class="mstat-label">// post age window</div><div class="mstat-val c-sm">{{ profile.min_post_age_minutes }}m – {{ profile.max_post_age_minutes }}m</div></div>
+    <div class="mstat"><div class="mstat-label">// pid</div><div class="mstat-val c-sm" id="ms-pid">{{ profile.pid|default:"—" }}</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-logs"     onclick="switchTab('logs')">// Logs</button>
+    <button class="tab-btn"        id="tab-comments" onclick="switchTab('comments')">// Comments <span class="tab-pill" id="cmt-count">0</span></button>
+    <button class="tab-btn"        id="tab-targets"  onclick="switchTab('targets')">// Target Profiles <span class="tab-pill" id="tgt-count">0</span></button>
+  </div>
+
+  <!-- Panels -->
+  <div class="tab-panels">
+
+    <!-- LOGS -->
+    <div class="tab-panel active" id="panel-logs">
+      <div class="log-toolbar">
+        <div class="search-wrap">
+          <span class="si">⌕</span>
+          <input type="text" id="logSearch" placeholder="Search logs…" oninput="handleSearch(this.value)">
+        </div>
+        <span class="search-count" id="searchCount" style="display:none"></span>
+        <label class="toggle-label">
+          <input type="checkbox" id="autoScroll" checked>
+          <div class="toggle-track"></div>
+          auto-scroll
+        </label>
+        <a href="/api/profiles/{{ profile.pk }}/log/download/" class="btn btn-ghost" style="padding:6px 12px;font-size:10px" title="Download full log file">↓ Download</a>
+      </div>
+      <div class="log-body" id="logBody"></div>
+    </div>
+
+    <!-- COMMENTS -->
+    <div class="tab-panel" id="panel-comments">
+      <div class="pane-hd">
+        <span class="pane-title"><em>02</em> &nbsp;Recent Comments</span>
+        <button class="btn btn-ghost" style="padding:5px 10px;font-size:10px" onclick="loadComments()">↻ Refresh</button>
+      </div>
+      <div class="scroll-body" id="commentsBody"><div class="empty-state">Loading…</div></div>
+    </div>
+
+    <!-- TARGETS -->
+    <div class="tab-panel" id="panel-targets">
+      <div class="targets-add">
+        <div class="targets-add-lbl">// add target profile</div>
+        <div class="targets-add-row">
+          <input type="text" id="targetUrl"   placeholder="https://www.linkedin.com/in/username/" style="flex:2">
+          <input type="text" id="targetLabel" placeholder="Label (optional)">
+          <button class="btn btn-primary" onclick="addTarget()">+ Add</button>
+        </div>
+        <div class="targets-hint">
+          The bot visits the target's <em>recent activity</em> page and comments on their posts matching your age filter.<br>
+          Hit <em>▶ Run</em> on any target for a one-shot targeted run. The header <em>▶ Start</em> button always runs feed mode.
+        </div>
+      </div>
+      <div class="pane-hd">
+        <span class="pane-title"><em>03</em> &nbsp;Saved Targets</span>
+        <button class="btn btn-ghost" style="padding:5px 10px;font-size:10px" onclick="loadTargets()">↻</button>
+      </div>
+      <div class="scroll-body" id="targetsBody"><div class="empty-state">Loading…</div></div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const PROFILE_ID = {{ profile.pk }};
+function getCsrf() {
+  return document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrftoken='))?.split('=')[1]||'';
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  ['logs','comments','targets'].forEach(n => {
+    document.getElementById('tab-'+n).classList.toggle('active', n===name);
+    document.getElementById('panel-'+n).classList.toggle('active', n===name);
+  });
+}
+
+// ── Bot control ───────────────────────────────────────────────────────────────
+async function botAction(action) {
+  const res  = await fetch(`/api/profiles/${PROFILE_ID}/${action}/`, {method:'POST',headers:{'X-CSRFToken':getCsrf()}});
+  const data = await res.json();
+  toast(data.msg, data.ok?'ok':'err');
+  if (data.ok) setTimeout(refreshStats, 800);
+}
+
+async function refreshStats() {
+  const d = await fetch(`/api/profiles/${PROFILE_ID}/stats/`).then(r=>r.json());
+  document.getElementById('ms-total').textContent = d.total;
+  document.getElementById('ms-today').textContent = d.today;
+  document.getElementById('ms-pid').textContent   = d.pid||'—';
+  const pill = document.getElementById('statusPill');
+  const txt  = document.getElementById('statusTxt');
+  const s    = document.getElementById('btnStart');
+  const p    = document.getElementById('btnStop');
+  if (d.running) { pill.className='status-pill running'; txt.textContent='Running'; s.disabled=true; p.disabled=false; }
+  else           { pill.className='status-pill stopped'; txt.textContent='Stopped'; s.disabled=false; p.disabled=true; }
+}
+setInterval(refreshStats,5000);
+refreshStats();
+
+// ── Comments ──────────────────────────────────────────────────────────────────
+function fmtComment(c) {
+  const d  = new Date(c.created_at+(c.created_at.endsWith('Z')?'':'Z'));
+  const ts = isNaN(d) ? c.created_at : d.toLocaleString();
+  const age = c.post_age_minutes!=null ? `${c.post_age_minutes}m old` : '';
+  return `<div class="comment-item">
+    <div class="comment-meta"><span class="comment-time">${ts}</span><span class="comment-age">${age}</span></div>
+    <div class="comment-text">"${(c.comment||'').replace(/</g,'&lt;')}"</div>
+    <div class="comment-post">${(c.post_text||'').replace(/</g,'&lt;')}</div>
+  </div>`;
+}
+async function loadComments() {
+  const data = await fetch(`/api/profiles/${PROFILE_ID}/comments/`).then(r=>r.json());
+  document.getElementById('cmt-count').textContent = data.length;
+  document.getElementById('commentsBody').innerHTML = data.length
+    ? data.map(fmtComment).join('')
+    : '<div class="empty-state">// no comments yet</div>';
+}
+loadComments();
+setInterval(loadComments,15000);
+
+// ── Live Logs + Search ────────────────────────────────────────────────────────
+const logBody    = document.getElementById('logBody');
+const autoScroll = document.getElementById('autoScroll');
+let allLines = [];
+let inSearch = false;
+
+function colorLine(raw) {
+  const e = raw.replace(/</g,'&lt;');
+  if (/\[ERROR\]|❌/.test(e))  return `<span class="log-line log-error">${e}</span>`;
+  if (/\[WARNING\]|⚠/.test(e)) return `<span class="log-line log-warn">${e}</span>`;
+  if (/✅|🚀/.test(e))         return `<span class="log-line log-ok">${e}</span>`;
+  if (/🤖|💬/.test(e))        return `<span class="log-line log-bot">${e}</span>`;
+  return `<span class="log-line log-info">${e}</span>`;
+}
+function appendLiveLine(raw) {
+  if (allLines.length >= 600) allLines.shift();
+  allLines.push(raw);
+  if (!inSearch) {
+    const s = document.createElement('span');
+    s.innerHTML = colorLine(raw);
+    logBody.appendChild(s.firstChild);
+    while (logBody.children.length > 600) logBody.removeChild(logBody.firstChild);
+    if (autoScroll.checked) logBody.scrollTop = logBody.scrollHeight;
+  }
+}
+
+const evtSrc = new EventSource(`/stream/logs/${PROFILE_ID}/`);
+evtSrc.onmessage = e => appendLiveLine(e.data);
+
+let searchTimer = null;
+function handleSearch(q) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => doSearch(q.trim()), 250);
+}
+
+async function doSearch(q) {
+  const countEl = document.getElementById('searchCount');
+  if (!q) {
+    inSearch = false;
+    countEl.style.display = 'none';
+    logBody.innerHTML = '';
+    allLines.forEach(raw => {
+      const s = document.createElement('span');
+      s.innerHTML = colorLine(raw);
+      logBody.appendChild(s.firstChild);
+    });
+    if (autoScroll.checked) logBody.scrollTop = logBody.scrollHeight;
+    return;
+  }
+  inSearch = true;
+  const data = await fetch(`/api/profiles/${PROFILE_ID}/log/search/?q=${encodeURIComponent(q)}`).then(r=>r.json());
+  countEl.textContent = `${data.lines.length} match${data.lines.length!==1?'es':''}`;
+  countEl.style.display = '';
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');
+  logBody.innerHTML = '';
+  data.lines.forEach(raw => {
+    const esc = raw.replace(/</g,'&lt;');
+    const s = document.createElement('span');
+    s.className = 'log-line log-info';
+    s.innerHTML = esc.replace(re, m => `<mark>${m}</mark>`);
+    logBody.appendChild(s);
+  });
+  logBody.scrollTop = logBody.scrollHeight;
+}
+
+// ── Targets ───────────────────────────────────────────────────────────────────
+function fmtTarget(t) {
+  const lbl = (t.label || t.linkedin_url.replace('https://www.linkedin.com/in/','').replace('/','@')).replace(/</g,'&lt;');
+  return `<div class="target-item${t.is_active?'':' inactive'}" id="ti-${t.id}">
+    <div class="tgt-dot"></div>
+    <div class="tgt-info">
+      <div class="tgt-label">${lbl}</div>
+      <div class="tgt-url">${t.linkedin_url}</div>
+    </div>
+    <div class="tgt-actions">
+      <button class="btn btn-run" onclick="runTarget(${t.id},'${lbl.replace(/'/g,"\\'")}')">▶ Run</button>
+      <button class="btn btn-tog" onclick="toggleTarget(${t.id})">${t.is_active?'Disable':'Enable'}</button>
+      <button class="btn btn-del" onclick="deleteTarget(${t.id})">✕</button>
+    </div>
+  </div>`;
+}
+async function loadTargets() {
+  const data = await fetch(`/api/profiles/${PROFILE_ID}/targets/`).then(r=>r.json());
+  document.getElementById('tgt-count').textContent = data.length;
+  document.getElementById('targetsBody').innerHTML = data.length
+    ? data.map(fmtTarget).join('')
+    : `<div class="empty-state">No targets yet.<br>Add a LinkedIn profile URL above to comment on their posts directly.</div>`;
+}
+loadTargets();
+
+async function addTarget() {
+  const url   = document.getElementById('targetUrl').value.trim();
+  const label = document.getElementById('targetLabel').value.trim();
+  if (!url) { toast('Enter a LinkedIn URL','err'); return; }
+  const fd = new FormData();
+  fd.append('linkedin_url', url);
+  fd.append('label', label);
+  const data = await fetch(`/api/profiles/${PROFILE_ID}/targets/add/`, {method:'POST',headers:{'X-CSRFToken':getCsrf()},body:fd}).then(r=>r.json());
+  toast(data.msg, data.ok?'ok':'err');
+  if (data.ok) { document.getElementById('targetUrl').value=''; document.getElementById('targetLabel').value=''; loadTargets(); }
+}
+async function deleteTarget(tid) {
+  if (!confirm('Remove this target?')) return;
+  const data = await fetch(`/api/profiles/${PROFILE_ID}/targets/${tid}/delete/`, {method:'POST',headers:{'X-CSRFToken':getCsrf()}}).then(r=>r.json());
+  toast(data.msg, data.ok?'ok':'err');
+  if (data.ok) loadTargets();
+}
+async function toggleTarget(tid) {
+  const data = await fetch(`/api/profiles/${PROFILE_ID}/targets/${tid}/toggle/`, {method:'POST',headers:{'X-CSRFToken':getCsrf()}}).then(r=>r.json());
+  if (data.ok) loadTargets();
+}
+async function runTarget(tid, label) {
+  if (!confirm(`Start targeted run on "${label}"?\n\nThe bot will visit their activity page and comment on matching posts.`)) return;
+  const data = await fetch(`/api/profiles/${PROFILE_ID}/targets/${tid}/start/`, {method:'POST',headers:{'X-CSRFToken':getCsrf()}}).then(r=>r.json());
+  toast(data.msg, data.ok?'ok':'err');
+  if (data.ok) { setTimeout(refreshStats,800); switchTab('logs'); }
+}
+</script>
+{% endblock %}

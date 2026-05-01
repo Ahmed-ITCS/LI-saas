@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LI_Bot — Login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0f; --surface: #0f0f17; --surface2: #13131d;
+    --border: #1a1a2a; --border2: #222235;
+    --accent: #00e5ff; --accent3: #10b981; --danger: #f43f5e;
+    --text: #e2e8f0; --muted: #475569; --muted2: #64748b;
+    --mono: 'IBM Plex Mono', monospace; --sans: 'IBM Plex Sans', sans-serif;
+  }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--sans);
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,.018) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+  .card {
+    position: relative; z-index: 1;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    width: 100%; max-width: 400px;
+    padding: 40px;
+    box-shadow: 0 0 60px rgba(0,0,0,.5), 0 0 120px rgba(0,229,255,.03);
+  }
+  .logo {
+    font-family: var(--mono);
+    font-size: 18px; font-weight: 600;
+    letter-spacing: .12em; text-transform: uppercase;
+    color: var(--text); margin-bottom: 6px;
+  }
+  .logo em { color: var(--accent); font-style: normal; }
+  .subtitle {
+    font-family: var(--mono); font-size: 10px;
+    color: var(--muted); letter-spacing: .1em;
+    text-transform: uppercase; margin-bottom: 36px;
+  }
+  .form-group { margin-bottom: 18px; }
+  .form-group label {
+    display: block;
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted2); margin-bottom: 8px;
+  }
+  .form-group input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: var(--mono); font-size: 13px;
+    padding: 10px 14px; outline: none;
+    transition: border-color .2s;
+  }
+  .form-group input:focus { border-color: var(--accent); }
+  .error-list {
+    margin-bottom: 18px;
+    padding: 10px 14px;
+    background: rgba(244,63,94,.08);
+    border: 1px solid rgba(244,63,94,.25);
+    border-radius: 3px;
+    font-family: var(--mono); font-size: 11px;
+    color: var(--danger);
+  }
+  .btn {
+    width: 100%;
+    display: flex; align-items: center; justify-content: center;
+    padding: 11px;
+    border-radius: 3px;
+    font-family: var(--mono); font-size: 12px;
+    font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+    cursor: pointer; border: 1px solid; transition: all .2s;
+    margin-top: 8px;
+  }
+  .btn-primary {
+    color: var(--accent); border-color: rgba(0,229,255,.35);
+    background: rgba(0,229,255,.07);
+  }
+  .btn-primary:hover { background: rgba(0,229,255,.15); box-shadow: 0 0 20px rgba(0,229,255,.1); }
+  .switch {
+    margin-top: 24px; text-align: center;
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+  }
+  .switch a { color: var(--accent); text-decoration: none; }
+  .switch a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">LI<em>_</em>Bot</div>
+  <div class="subtitle">// sign in to your account</div>
+
+  {% if form.errors %}
+  <div class="error-list">
+    {% for field in form %}{% for e in field.errors %}{{ e }}<br>{% endfor %}{% endfor %}
+    {% for e in form.non_field_errors %}{{ e }}<br>{% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" name="username" autofocus autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" name="password" autocomplete="current-password">
+    </div>
+    <button type="submit" class="btn btn-primary">▶ Sign In</button>
+  </form>
+
+  <div class="switch">
+    No account? <a href="/accounts/signup/">Create one</a>
+  </div>
+</div>
+</body>
+</html>

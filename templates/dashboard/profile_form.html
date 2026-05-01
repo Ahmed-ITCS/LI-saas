@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}LI_Bot — {{ action }} Profile{% endblock %}
+
+{% block extra_head %}
+<style>
+  .form-wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 36px 28px;
+  }
+  .form-page-title {
+    font-family: var(--mono);
+    font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted2); margin-bottom: 28px;
+  }
+  .form-page-title em { color: var(--accent); font-style: normal; }
+
+  .form-card {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .form-section {
+    padding: 24px 28px;
+    border-bottom: 1px solid var(--border);
+  }
+  .form-section:last-child { border-bottom: none; }
+  .form-section-title {
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 20px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .form-section-title em { color: var(--accent); font-style: normal; }
+  .form-section-title::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  .form-group label {
+    display: block;
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted2); margin-bottom: 7px;
+  }
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: var(--mono); font-size: 13px;
+    padding: 10px 14px; outline: none;
+    transition: border-color .2s;
+  }
+  .form-group input:focus,
+  .form-group textarea:focus,
+  .form-group select:focus { border-color: var(--accent); }
+  .form-group textarea { resize: vertical; }
+  .form-group select option { background: var(--surface2); }
+  .form-group .help {
+    font-size: 10px; color: var(--muted); margin-top: 5px;
+    font-family: var(--mono); line-height: 1.5;
+  }
+  .form-group .errs {
+    font-size: 11px; color: var(--danger); margin-top: 5px;
+    font-family: var(--mono);
+  }
+  .checkbox-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 0;
+  }
+  .checkbox-row input[type="checkbox"] { accent-color: var(--accent3); width: 16px; height: 16px; cursor: pointer; }
+  .checkbox-row label {
+    font-family: var(--mono); font-size: 12px; color: var(--text);
+    cursor: pointer; margin: 0;
+  }
+
+  .form-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 28px;
+    background: var(--surface2);
+    border-top: 1px solid var(--border);
+  }
+
+  {% if profile %}
+  .delete-link {
+    font-family: var(--mono); font-size: 11px; color: var(--danger);
+    text-decoration: none; opacity: .6; transition: opacity .2s;
+  }
+  .delete-link:hover { opacity: 1; }
+  {% endif %}
+
+  .form-actions { display: flex; gap: 10px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-wrap">
+  <div class="form-page-title"><em>{{ action|lower }}</em> &nbsp;LinkedIn Profile</div>
+
+  <div class="form-card">
+    <form method="post">
+      {% csrf_token %}
+
+      <!-- Identity -->
+      <div class="form-section">
+        <div class="form-section-title"><em>01</em> &nbsp;Identity</div>
+        <div class="form-group" style="margin-bottom:16px">
+          <label>Profile Label</label>
+          <input type="text" name="label" value="{{ form.label.value|default:'' }}" placeholder="e.g. Work account">
+          {% if form.label.errors %}<div class="errs">{{ form.label.errors|join:', ' }}</div>{% endif %}
+        </div>
+      </div>
+
+      <!-- LinkedIn Credentials -->
+      <div class="form-section">
+        <div class="form-section-title"><em>02</em> &nbsp;LinkedIn Credentials</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>LinkedIn Email</label>
+            <input type="email" name="li_email_plain" value="{{ form.li_email_plain.value|default:'' }}">
+            {% if form.li_email_plain.errors %}<div class="errs">{{ form.li_email_plain.errors|join:', ' }}</div>{% endif %}
+          </div>
+          <div class="form-group">
+            <label>LinkedIn Password</label>
+            <input type="password" name="li_password_plain" value="{{ form.li_password_plain.value|default:'' }}">
+            {% if form.li_password_plain.errors %}<div class="errs">{{ form.li_password_plain.errors|join:', ' }}</div>{% endif %}
+            <div class="help">Stored encrypted (Fernet AES-128)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LLM -->
+      <div class="form-section">
+        <div class="form-section-title"><em>03</em> &nbsp;LLM Provider</div>
+        <div class="form-group" style="margin-bottom:16px">
+          <label>Provider</label>
+          <select name="llm_provider">
+            {% for val, label in form.fields.llm_provider.choices %}
+            <option value="{{ val }}" {% if form.llm_provider.value == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Gemini API Keys (one per line)</label>
+          <textarea name="gemini_keys" rows="4" placeholder="AIzaSy...">{{ form.gemini_keys.value|default:'' }}</textarea>
+          <div class="help">Keys are rotated automatically on rate-limit (429).</div>
+        </div>
+      </div>
+
+      <!-- Bot behaviour -->
+      <div class="form-section">
+        <div class="form-section-title"><em>04</em> &nbsp;Bot Behaviour</div>
+        <div class="form-grid" style="margin-bottom:16px">
+          <div class="form-group">
+            <label>Min Post Age (minutes)</label>
+            <input type="number" name="min_post_age_minutes" value="{{ form.min_post_age_minutes.value|default:30 }}" min="0">
+            <div class="help">Skip posts newer than this.</div>
+          </div>
+          <div class="form-group">
+            <label>Max Post Age (minutes)</label>
+            <input type="number" name="max_post_age_minutes" value="{{ form.max_post_age_minutes.value|default:360 }}" min="1">
+            <div class="help">Skip posts older than this.</div>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:16px">
+          <label>Max Comments per Round</label>
+          <input type="number" name="max_comments_per_round" value="{{ form.max_comments_per_round.value|default:6 }}" min="1" max="50">
+        </div>
+        <div class="form-group" style="margin-bottom:16px">
+          <label>Persona Prompt</label>
+          <textarea name="persona_prompt" rows="3">{{ form.persona_prompt.value|default:'' }}</textarea>
+          <div class="help">Injected before every comment generation call.</div>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="run_parallel" name="run_parallel" {% if form.run_parallel.value %}checked{% endif %}>
+          <label for="run_parallel">Run as independent parallel process</label>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="form-footer">
+        {% if profile %}
+        <a href="/profiles/{{ profile.pk }}/delete/" class="delete-link"
+           onclick="return confirm('Delete this profile and all its data?')">
+          ⚠ Delete profile
+        </a>
+        {% else %}
+        <span></span>
+        {% endif %}
+        <div class="form-actions">
+          <a href="/" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-primary">
+            {% if profile %}Save Changes{% else %}Create Profile{% endif %}
+          </button>
+        </div>
+      </div>
+
+    </form>
+  </div>
+</div>
+{% endblock %}
