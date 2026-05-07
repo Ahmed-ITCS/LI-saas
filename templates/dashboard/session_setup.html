@@ -193,6 +193,20 @@
     padding: 10px 14px; outline: none;
     transition: border-color .2s;
   }
+  .field-group textarea {
+    width: 100%;
+    min-height: 92px;
+    resize: vertical;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: var(--mono); font-size: 12px;
+    padding: 10px 14px; outline: none;
+    transition: border-color .2s;
+  }
+  .field-group textarea:focus { border-color: var(--accent); }
+  .field-group textarea::placeholder { color: var(--muted); }
   .field-group input:focus { border-color: var(--accent); }
   .field-group input::placeholder { color: var(--muted); }
   .field-help {
@@ -276,6 +290,9 @@
           Go to <strong>linkedin.com</strong> and make sure you're logged in.
           You should see your feed.
         </div>
+        <button class="btn btn-ghost" type="button" onclick="openLinkedInLogin()">
+          Open LinkedIn Login in New Tab
+        </button>
       </div>
     </div>
 
@@ -413,6 +430,19 @@
     <div class="cookie-form-body">
       <div class="field-group">
         <div class="field-label">
+          Cookie Header Paste
+          <span class="field-optional">helper</span>
+        </div>
+        <textarea id="f_cookie_blob" placeholder="Paste full cookie string, e.g. li_at=...; JSESSIONID=&quot;ajax:...&quot;; lidc=..."></textarea>
+        <div class="field-help">Optional: paste a full cookie string and click parse to auto-fill fields below.</div>
+        <div style="margin-top:10px;display:flex;gap:10px">
+          <button class="btn btn-ghost" type="button" onclick="parseCookieBlob()">Parse Cookies</button>
+          <button class="btn btn-ghost" type="button" onclick="clearCookieBlob()">Clear Blob</button>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <div class="field-label">
           li_at
           <span class="field-required">required</span>
         </div>
@@ -466,6 +496,55 @@ const PROFILE_ID = {{ profile.pk }};
 
 function getCsrf() {
   return document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrftoken='))?.split('=')[1]||'';
+}
+
+function openLinkedInLogin() {
+  window.open('https://www.linkedin.com/login', '_blank', 'noopener,noreferrer');
+}
+
+function parseCookieBlob() {
+  const raw = document.getElementById('f_cookie_blob').value.trim();
+  if (!raw) {
+    showResult('Paste a cookie string first.', false);
+    return;
+  }
+
+  const map = {};
+  raw.split(';').forEach(part => {
+    const seg = part.trim();
+    if (!seg) return;
+    const idx = seg.indexOf('=');
+    if (idx <= 0) return;
+    const k = seg.slice(0, idx).trim();
+    const v = seg.slice(idx + 1).trim();
+    if (k) map[k] = v;
+  });
+
+  let filled = 0;
+  if (map.li_at && !document.getElementById('f_li_at').value.trim()) {
+    document.getElementById('f_li_at').value = map.li_at;
+    filled += 1;
+  }
+  if (map.JSESSIONID && !document.getElementById('f_jsessionid').value.trim()) {
+    document.getElementById('f_jsessionid').value = map.JSESSIONID;
+    filled += 1;
+  }
+  if (map.lidc && !document.getElementById('f_lidc').value.trim()) {
+    document.getElementById('f_lidc').value = map.lidc;
+  }
+  if (map.li_rm && !document.getElementById('f_li_rm').value.trim()) {
+    document.getElementById('f_li_rm').value = map.li_rm;
+  }
+
+  if (filled === 0) {
+    showResult('Could not auto-fill li_at/JSESSIONID from pasted blob.', false);
+    return;
+  }
+  showResult('Parsed cookies and auto-filled fields.', true);
+}
+
+function clearCookieBlob() {
+  document.getElementById('f_cookie_blob').value = '';
 }
 
 async function saveSession() {
