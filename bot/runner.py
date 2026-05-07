@@ -17,6 +17,11 @@ import logging
 import django
 
 # ── Bootstrap Django ──────────────────────────────────────────────────────────
+# Ensure project root is importable when running as "python bot/runner.py".
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "libot.settings")
 django.setup()
 
