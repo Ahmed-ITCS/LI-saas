@@ -203,6 +203,19 @@ class LinkedInProfile(models.Model):
         import os
         try:
             os.kill(self.pid, 0)
+            # PID reuse is common on Linux; make sure this PID is our bot runner.
+            if os.name == "posix":
+                cmdline_path = f"/proc/{self.pid}/cmdline"
+                try:
+                    with open(cmdline_path, "rb") as f:
+                        raw = f.read().replace(b"\x00", b" ").decode("utf-8", errors="ignore")
+                    if "bot/runner.py" not in raw and "bot\\runner.py" not in raw:
+                        return False
+                except FileNotFoundError:
+                    return False
+                except Exception:
+                    # If proc cmdline cannot be read, keep legacy behavior.
+                    pass
             return True
         except (ProcessLookupError, PermissionError):
             return False

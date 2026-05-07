@@ -199,13 +199,24 @@ def api_bot_start(request, pk):
     env["BOT_STATE_FILE"] = state_path
     env["DJANGO_SETTINGS_MODULE"] = "libot.settings"
 
-    proc = subprocess.Popen(
-        ["python", bot_script],
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        cwd=os.path.dirname(os.path.dirname(__file__)),
-    )
+    runner_log = open(log_path, "a", encoding="utf-8")
+    try:
+        proc = subprocess.Popen(
+            ["python", bot_script],
+            env=env,
+            stdout=runner_log,
+            stderr=runner_log,
+            cwd=os.path.dirname(os.path.dirname(__file__)),
+        )
+    finally:
+        runner_log.close()
+
+    # Early crash detection (e.g. bad env/deps/session bootstrap).
+    time.sleep(0.6)
+    exit_code = proc.poll()
+    if exit_code is not None:
+        return JsonResponse({"ok": False, "msg": f"Bot failed to start (exit {exit_code}). Check profile log."})
+
     profile.pid = proc.pid
     profile.save(update_fields=["pid"])
 
@@ -423,13 +434,24 @@ def api_bot_start_targeted(request, pk, tid):
     env["BOT_TARGET_LABEL"]  = str(target)
     env["DJANGO_SETTINGS_MODULE"] = "libot.settings"
 
-    proc = subprocess.Popen(
-        ["python", bot_script],
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        cwd=os.path.dirname(os.path.dirname(__file__)),
-    )
+    runner_log = open(log_path, "a", encoding="utf-8")
+    try:
+        proc = subprocess.Popen(
+            ["python", bot_script],
+            env=env,
+            stdout=runner_log,
+            stderr=runner_log,
+            cwd=os.path.dirname(os.path.dirname(__file__)),
+        )
+    finally:
+        runner_log.close()
+
+    # Early crash detection (e.g. invalid target/session/deps).
+    time.sleep(0.6)
+    exit_code = proc.poll()
+    if exit_code is not None:
+        return JsonResponse({"ok": False, "msg": f"Targeted bot failed to start (exit {exit_code}). Check profile log."})
+
     profile.pid = proc.pid
     profile.save(update_fields=["pid"])
     ensure_tail_thread(profile.pk, log_path)
