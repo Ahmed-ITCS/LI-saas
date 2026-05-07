@@ -629,15 +629,27 @@ def api_session_save_cookies(request, pk):
     if profile.is_running():
         return JsonResponse({"ok": False, "msg": "Stop the bot before updating the session."})
 
-    li_at      = request.POST.get("li_at", "").strip()
-    jsessionid = request.POST.get("jsessionid", "").strip()
-    li_rm      = request.POST.get("li_rm", "").strip()
-    lidc       = request.POST.get("lidc", "").strip()
+    def _clean_cookie(raw: str, name: str) -> str:
+        value = (raw or "").strip().strip(";")
+        lower_name = name.lower()
+        if value.lower().startswith(lower_name + "="):
+            value = value.split("=", 1)[1].strip()
+        return value.strip().strip(";")
+
+    li_at      = _clean_cookie(request.POST.get("li_at", ""), "li_at")
+    jsessionid = _clean_cookie(request.POST.get("jsessionid", ""), "JSESSIONID")
+    li_rm      = _clean_cookie(request.POST.get("li_rm", ""), "li_rm")
+    lidc       = _clean_cookie(request.POST.get("lidc", ""), "lidc")
 
     if not li_at:
         return JsonResponse({"ok": False, "msg": "li_at cookie is required."})
     if not jsessionid:
         return JsonResponse({"ok": False, "msg": "JSESSIONID cookie is required."})
+
+    # LinkedIn often stores JSESSIONID in quoted form. If a user pastes an
+    # unquoted value, normalize it so CSRF-linked flows behave as expected.
+    if not (jsessionid.startswith('"') and jsessionid.endswith('"')):
+        jsessionid = f'"{jsessionid}"'
 
     # Build a Playwright-compatible storage_state structure
     cookies = [
@@ -655,7 +667,7 @@ def api_session_save_cookies(request, pk):
             "value":    jsessionid,
             "domain":   ".linkedin.com",
             "path":     "/",
-            "httpOnly": False,
+            "httpOnly": True,
             "secure":   True,
             "sameSite": "None",
         },
