@@ -99,10 +99,20 @@ def is_already_commented(urn: str) -> bool:
     return exists
 
 def is_content_already_commented(text: str) -> bool:
+    normalized = (text or "").strip()
+    if not normalized:
+        return False
+
     h = _content_hash(text)
     if h in _commented_hashes:
         return True
-    exists = CommentLog.objects.filter(profile_id=PROFILE_ID, post_text__startswith=text[:50]).exists()
+
+    # Use stricter duplicate detection to avoid false positives on common post
+    # prefixes like "I’m excited to share...".
+    exists = CommentLog.objects.filter(
+        profile_id=PROFILE_ID,
+        post_text=normalized[:300],
+    ).exists()
     if exists:
         _commented_hashes.add(h)
     return exists
