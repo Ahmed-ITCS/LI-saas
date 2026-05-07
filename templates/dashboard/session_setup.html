@@ -299,7 +299,7 @@
     <div class="step">
       <div class="step-num">2</div>
       <div class="step-body">
-        <div class="step-title">Open DevTools</div>
+        <div class="step-title">Open DevTools (Network method recommended)</div>
         <div class="step-desc">Press the keyboard shortcut for your browser:</div>
         <div class="shortcut-row">
           <span class="kbd">Chrome / Edge</span>
@@ -328,7 +328,21 @@
     <div class="step">
       <div class="step-num">3</div>
       <div class="step-body">
-        <div class="step-title">Go to the Application tab → Cookies</div>
+        <div class="step-title">Preferred: copy Cookie header from Network request</div>
+        <div class="step-desc">
+          In DevTools open <strong>Network</strong>, then refresh LinkedIn feed once.
+          Click any request to <strong>www.linkedin.com</strong> and copy the full
+          <code>cookie:</code> request header value.
+          Paste that directly into the helper box below, then click
+          <strong>Parse + Save Session</strong>.
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <div class="step-title">Alternative: Application tab → Cookies</div>
         <div class="step-desc">
           In DevTools, click <strong>Application</strong> (Chrome/Edge) or <strong>Storage</strong> (Firefox)
           in the top tab bar. Then in the left sidebar expand <strong>Cookies</strong>
@@ -381,7 +395,7 @@
     </div>
 
     <div class="step">
-      <div class="step-num">4</div>
+      <div class="step-num">5</div>
       <div class="step-body">
         <div class="step-title">Find and copy <code>li_at</code></div>
         <div class="step-desc">
@@ -395,7 +409,7 @@
     </div>
 
     <div class="step">
-      <div class="step-num">5</div>
+      <div class="step-num">6</div>
       <div class="step-body">
         <div class="step-title">Find and copy <code>JSESSIONID</code></div>
         <div class="step-desc">
@@ -407,7 +421,7 @@
     </div>
 
     <div class="step">
-      <div class="step-num">6</div>
+      <div class="step-num">7</div>
       <div class="step-body">
         <div class="step-title">Paste below and save</div>
         <div class="step-desc">Fill in the form below and click <strong>Save Session</strong>.</div>
@@ -437,6 +451,7 @@
         <div class="field-help">Optional: paste a full cookie string and click parse to auto-fill fields below.</div>
         <div style="margin-top:10px;display:flex;gap:10px">
           <button class="btn btn-ghost" type="button" onclick="parseCookieBlob()">Parse Cookies</button>
+          <button class="btn btn-primary" type="button" onclick="parseAndSaveSession()">Parse + Save Session</button>
           <button class="btn btn-ghost" type="button" onclick="clearCookieBlob()">Clear Blob</button>
         </div>
       </div>
@@ -492,7 +507,7 @@
 
 {% block extra_js %}
 <script>
-const PROFILE_ID = {{ profile.pk }};
+const PROFILE_ID = Number("{{ profile.pk|escapejs }}");
 
 function getCsrf() {
   return document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrftoken='))?.split('=')[1]||'';
@@ -503,20 +518,50 @@ function openLinkedInLogin() {
 }
 
 function parseCookieBlob() {
-  const raw = document.getElementById('f_cookie_blob').value.trim();
+  let raw = document.getElementById('f_cookie_blob').value.trim();
   if (!raw) {
     showResult('Paste a cookie string first.', false);
     return;
   }
 
   const map = {};
+
+  // Format A: cookies table export rows (tab-separated), e.g.
+  // name<TAB>value<TAB>domain<TAB>...
+  const lines = raw.replace(/\r/g, '').split('\n').map(s => s.trim()).filter(Boolean);
+  const hasTabularRows = lines.some(line => line.includes('\t'));
+  if (hasTabularRows) {
+    for (const line of lines) {
+      const cols = line.split('\t');
+      if (cols.length < 2) continue;
+      const name = (cols[0] || '').trim();
+      const value = (cols[1] || '').trim().replace(/^"(.*)"$/, '$1');
+      const domain = (cols[2] || '').trim().toLowerCase();
+      if (!name || !value) continue;
+      if (domain && !domain.includes('linkedin.com')) continue;
+      map[name] = value;
+    }
+  }
+
+  // Accept common copy formats:
+  // 1) "cookie: a=1; b=2"
+  // 2) multiline request headers
+  // 3) plain "a=1; b=2"
+  raw = raw.replace(/\r/g, '');
+  const cookieHeaderMatch = raw.match(/(?:^|\n)\s*cookie\s*:\s*([^\n]+)/i);
+  if (cookieHeaderMatch && cookieHeaderMatch[1]) {
+    raw = cookieHeaderMatch[1].trim();
+  } else {
+    raw = raw.replace(/\n+/g, '; ');
+  }
+
   raw.split(';').forEach(part => {
     const seg = part.trim();
     if (!seg) return;
     const idx = seg.indexOf('=');
     if (idx <= 0) return;
     const k = seg.slice(0, idx).trim();
-    const v = seg.slice(idx + 1).trim();
+    const v = seg.slice(idx + 1).trim().replace(/^"(.*)"$/, '$1');
     if (k) map[k] = v;
   });
 
@@ -543,6 +588,29 @@ function parseCookieBlob() {
   showResult('Parsed cookies and auto-filled fields.', true);
 }
 
+function validateSessionFields() {
+  const liAt = document.getElementById('f_li_at').value.trim();
+  const jsid = document.getElementById('f_jsessionid').value.trim();
+
+  if (!liAt) return { ok: false, msg: 'li_at is required.' };
+  if (!jsid) return { ok: false, msg: 'JSESSIONID is required.' };
+  if (liAt.length < 80) return { ok: false, msg: 'li_at looks too short. Paste from Network cookie header again.' };
+  if (!/^(\"?ajax:)/i.test(jsid)) {
+    return { ok: false, msg: 'JSESSIONID should usually start with ajax:. Paste fresh value from Network.' };
+  }
+  return { ok: true, msg: '' };
+}
+
+async function parseAndSaveSession() {
+  parseCookieBlob();
+  const v = validateSessionFields();
+  if (!v.ok) {
+    showResult(v.msg, false);
+    return;
+  }
+  await saveSession();
+}
+
 function clearCookieBlob() {
   document.getElementById('f_cookie_blob').value = '';
 }
@@ -555,6 +623,8 @@ async function saveSession() {
 
   if (!li_at)      { showResult('li_at is required.', false); return; }
   if (!jsessionid) { showResult('JSESSIONID is required.', false); return; }
+  const v = validateSessionFields();
+  if (!v.ok) { showResult(v.msg, false); return; }
 
   const btn = document.getElementById('saveBtn');
   btn.disabled = true;
