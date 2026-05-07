@@ -18,6 +18,7 @@ urlpatterns = [
     path("api/profiles/<int:pk>/session/status/", views.api_session_status,     name="api_session_status"),
     path("api/profiles/<int:pk>/session/clear/",  views.api_session_clear,      name="api_session_clear"),
     path("api/profiles/<int:pk>/session/save/",   views.api_session_save_cookies, name="api_session_save_cookies"),
+    path("api/profiles/<int:pk>/session/upload/", views.api_session_upload,     name="api_session_upload"),
 
     # Logs
     path("api/profiles/<int:pk>/log/download/",   views.log_download,           name="log_download"),

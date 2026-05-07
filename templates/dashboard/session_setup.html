@@ -500,6 +500,22 @@
     </div>
   </div>
 
+  <div class="cookie-form" style="margin-top:16px">
+    <div class="cookie-form-head">
+      <div class="cookie-form-title"><em>upload</em> &nbsp;Playwright state.json</div>
+    </div>
+    <div class="cookie-form-body">
+      <div class="field-group" style="margin-bottom:0">
+        <div class="field-label">state.json <span class="field-required">required</span></div>
+        <input type="file" id="f_state_file" accept=".json,application/json">
+        <div class="field-help">Use this if you generated <code style="color:var(--accent)">state.json</code> locally and want to upload it directly.</div>
+      </div>
+    </div>
+    <div class="cookie-form-foot">
+      <button class="btn btn-primary" type="button" onclick="uploadSessionFile()" id="uploadBtn">Upload Session File</button>
+    </div>
+  </div>
+
   <div id="resultBanner"></div>
 
 </div>
@@ -674,6 +690,49 @@ async function clearSession() {
       badge.className = 'session-badge inactive';
       badge.innerHTML = '<div class="badge-dot"></div> No session — complete the steps above';
     }
+  }
+}
+
+async function uploadSessionFile() {
+  const fileInput = document.getElementById('f_state_file');
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) {
+    showResult('Choose a .json file first.', false);
+    return;
+  }
+  if (!file.name.toLowerCase().endsWith('.json')) {
+    showResult('Session file must be .json', false);
+    return;
+  }
+
+  const btn = document.getElementById('uploadBtn');
+  btn.disabled = true;
+  btn.textContent = 'Uploading…';
+
+  const fd = new FormData();
+  fd.append('session_file', file);
+
+  try {
+    const res = await fetch(`/api/profiles/${PROFILE_ID}/session/upload/`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCsrf() },
+      body: fd,
+    });
+    const data = await res.json();
+    showResult(data.msg, !!data.ok);
+    if (data.ok) {
+      fileInput.value = '';
+      const badge = document.querySelector('.session-badge');
+      if (badge) {
+        badge.className = 'session-badge active';
+        badge.innerHTML = '<div class="badge-dot"></div> Session active — bot is ready to run';
+      }
+    }
+  } catch (e) {
+    showResult(`Upload failed: ${e}`, false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Upload Session File';
   }
 }
 
