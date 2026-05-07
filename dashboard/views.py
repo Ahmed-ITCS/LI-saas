@@ -252,12 +252,20 @@ def stream_logs(request, pk):
             yield f"data: {line}\n\n"
 
         last_seen = len(snapshot)
+        last_heartbeat = time.time()
         while True:
             with _log_lock:
                 current = list(buf)
             for line in current[last_seen:]:
                 yield f"data: {line}\n\n"
             last_seen = len(current)
+
+            # Keep SSE connections alive so gunicorn doesn't time out idle workers.
+            now = time.time()
+            if now - last_heartbeat >= 15:
+                yield ": keepalive\n\n"
+                last_heartbeat = now
+
             time.sleep(0.5)
 
     return StreamingHttpResponse(
