@@ -10,7 +10,12 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-me-in-produc
 
 DEBUG = os.getenv("DEBUG", "true").lower() == "true"
 
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+_default_allowed_hosts = ["localhost", "127.0.0.1", "zaed.nidam.ai"]
+_env_allowed_hosts = os.getenv("ALLOWED_HOSTS", "")
+if _env_allowed_hosts.strip():
+    ALLOWED_HOSTS = [h.strip() for h in _env_allowed_hosts.split(",") if h.strip()]
+else:
+    ALLOWED_HOSTS = _default_allowed_hosts
 
 INSTALLED_APPS = [
     "django.contrib.admin",
