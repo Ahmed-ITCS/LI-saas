@@ -253,6 +253,7 @@ def stream_logs(request, pk):
 
         last_seen = len(snapshot)
         last_heartbeat = time.time()
+        started_at = time.time()
         while True:
             with _log_lock:
                 current = list(buf)
@@ -266,12 +267,21 @@ def stream_logs(request, pk):
                 yield ": keepalive\n\n"
                 last_heartbeat = now
 
+            # Sync gunicorn workers cannot hold one request forever; rotate stream.
+            # EventSource on the browser reconnects automatically.
+            if now - started_at >= 20:
+                break
+
             time.sleep(0.5)
 
     return StreamingHttpResponse(
         generate(),
         content_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
     )
 
 @login_required
