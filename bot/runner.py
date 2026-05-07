@@ -293,17 +293,20 @@ async def _process_post(page, post, urn, min_age, max_age, persona, provider, ma
     # ── Age filter ────────────────────────────────────────────────────────────
     age = await get_post_age_minutes(post)
     if age is None:
-        log.info(f"⏭️  {short} — could not parse age, skipping")
-        return False
-    if age < min_age:
+        # LinkedIn frequently renders relative time in dynamic/locale-specific
+        # structures; don't hard-skip a valid candidate just because age parser
+        # couldn't extract it.
+        log.info(f"ℹ️  {short} — could not parse age, continuing without age filter")
+    elif age < min_age:
         log.info(f"⏭️  {short} — too fresh ({age}m < {min_age}m), skipping")
         return False
-    if age > max_age:
+    elif age > max_age:
         log.info(f"⏭️  {short} — too old ({age}m > {max_age}m), skipping")
         mark_as_commented(urn, "", "", age)
         return False
 
-    log.info(f"🕐 Post age: {age}m ✓")
+    if age is not None:
+        log.info(f"🕐 Post age: {age}m ✓")
 
     # ── Text ─────────────────────────────────────────────────────────────────
     post_text = await get_post_text(post)
@@ -370,19 +373,10 @@ async def _run_feed_attempt_urn(
     try:
         post = await linkedin_feed.scoped_post_for_urn(page, urn)
         if not await post.count():
-            durl = linkedin_feed.activity_detail_url(urn)
-            log.info(
-                "📎 No hydrated card on feed — opening detail %s…",
-                durl[:88] + ("…" if len(durl) > 88 else ""),
-            )
-            try:
-                await page.goto(durl, wait_until="domcontentloaded", timeout=75000)
-                await page.wait_for_timeout(2800)
-                opened_detail = True
-                post = await linkedin_feed.scoped_post_on_detail_view(page, urn)
-            except PlaywrightError as e:
-                log.warning("⏭️  %s… detail fallback failed (%s), skipping", urn[:50], e)
-                return False
+            # Detail fallback is unstable in environments where LinkedIn issues
+            # redirect loops; skip this URN and keep the feed page stable.
+            log.info("⏭️  %s… not hydrated on feed, skipping detail fallback", urn[:50])
+            return False
 
         if not await post.count():
             log.warning("⏭️  %s… not in DOM — skipping", urn[:50])
