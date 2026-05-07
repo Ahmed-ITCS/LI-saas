@@ -473,7 +473,21 @@ async def wait_for_feed_ready(page, timeout_ms: float = 55000):
 async def initial_feed_navigation(
     page, *, wait_network_idle: bool, screenshot_path_prefix: str
 ) -> None:
-    await page.goto(FEED_HOME, wait_until="domcontentloaded", timeout=90000)
+    try:
+        await page.goto(FEED_HOME, wait_until="domcontentloaded", timeout=90000)
+    except Exception as e:
+        # LinkedIn sometimes loops redirects for stale/challenged sessions.
+        # Fall back to home so we can continue diagnostics instead of crashing.
+        if "ERR_TOO_MANY_REDIRECTS" in str(e):
+            log.warning("⚠️  Feed redirect loop detected — falling back to linkedin.com home")
+            try:
+                await page.goto("https://www.linkedin.com/", wait_until="domcontentloaded", timeout=90000)
+            except Exception as e2:
+                log.error("❌ Fallback navigation failed: %s", e2)
+                return
+        else:
+            raise
+
     await dismiss_sticky_alerts(page)
     await page.wait_for_timeout(3500)
     if wait_network_idle:
