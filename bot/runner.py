@@ -364,6 +364,8 @@ async def _run_feed_attempt_urn(
     commented_this_round: int,
 ) -> bool:
     """Locate post on feed or /feed/update/ permalink, run comment flow, restore feed if needed."""
+    from playwright.async_api import Error as PlaywrightError
+
     opened_detail = False
     try:
         post = await linkedin_feed.scoped_post_for_urn(page, urn)
@@ -373,10 +375,14 @@ async def _run_feed_attempt_urn(
                 "📎 No hydrated card on feed — opening detail %s…",
                 durl[:88] + ("…" if len(durl) > 88 else ""),
             )
-            await page.goto(durl, wait_until="domcontentloaded", timeout=75000)
-            await page.wait_for_timeout(2800)
-            opened_detail = True
-            post = await linkedin_feed.scoped_post_on_detail_view(page, urn)
+            try:
+                await page.goto(durl, wait_until="domcontentloaded", timeout=75000)
+                await page.wait_for_timeout(2800)
+                opened_detail = True
+                post = await linkedin_feed.scoped_post_on_detail_view(page, urn)
+            except PlaywrightError as e:
+                log.warning("⏭️  %s… detail fallback failed (%s), skipping", urn[:50], e)
+                return False
 
         if not await post.count():
             log.warning("⏭️  %s… not in DOM — skipping", urn[:50])
@@ -513,7 +519,16 @@ async def _run_feed(page, profile, persona, provider, min_age, max_age, max_cpr)
                 continue
 
         log.info(f"✅ Round #{round_number} done — {commented_this_round} comments")
-        await page.evaluate("window.scrollBy(0, 700)")
+        try:
+            await page.evaluate("window.scrollBy(0, 700)")
+        except Exception as e:
+            # Page may still be transitioning after a failed detail navigation.
+            log.warning("⚠️  Feed scroll skipped due to navigation state: %s", e)
+            try:
+                await page.goto(linkedin_feed.FEED_HOME, wait_until="domcontentloaded", timeout=90000)
+                await linkedin_feed.wait_for_feed_ready(page)
+            except Exception as nav_e:
+                log.warning("⚠️  Feed recovery navigation failed: %s", nav_e)
         await asyncio.sleep(random.randint(25, 45))
         log.info("😴 Sleeping 30 minutes before next round...")
         await asyncio.sleep(30 * 60)
