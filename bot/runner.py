@@ -22,6 +22,9 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+# This runner is an async script that intentionally performs Django ORM calls.
+# Allow ORM access from this async context for this subprocess only.
+os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "libot.settings")
 django.setup()
 
