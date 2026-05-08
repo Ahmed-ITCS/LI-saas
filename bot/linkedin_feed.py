@@ -18,6 +18,11 @@ log = logging.getLogger(__name__)
 
 FEED_HOME = "https://www.linkedin.com/feed/"
 
+# A "feed loaded" signal must clear at least this many distinct URNs from
+# anchor permalinks (or surface a real card container) before we trust it.
+# A single permalink is almost always sidebar / rail / chip noise.
+MIN_FEED_URNS = 3
+
 FEED_READY_SELECTOR = (
     '[data-urn^="urn:li:activity:"], '
     '[data-activity-urn^="urn:li:activity:"], '
@@ -210,22 +215,32 @@ async def activity_urns_from_page_links(page) -> list[str]:
 
 
 async def dom_has_encoded_activity_updates(page) -> bool:
-    if await activity_urns_from_page_links(page):
-        return True
-    return await page.evaluate(
-        """
-      () => {
-        const h = document.documentElement.outerHTML;
-        const head = h.slice(0, Math.min(h.length, 1800000));
-        const tail = h.length > 2000000 ? h.slice(-980000) : "";
-        const blob = head + tail;
-        return (
-          /urn:li:(activity|ugcPost):\\d+/i.test(blob) ||
-          /urn%3Ali%3A(activity|ugcPost)%3A\\d+/i.test(blob)
-        );
-      }
     """
+    Strict 'feed-is-usable' check.
+
+    Returns True only when the page actually contains feed content the bot can
+    interact with — either a real post card OR multiple distinct permalink URNs
+    (a single anchor is almost always sidebar / rail / profile-chip noise and
+    is NOT a usable feed).
+    """
+    has_cards = await page.evaluate(
+        """() => !!document.querySelector(
+            'div.feed-shared-update-v2, article.feed-shared-update-v2, '
+            + '[class*="feed-shared-update-v2"], [class*="feed-shared-update"]'
+        )"""
     )
+    if has_cards:
+        return True
+
+    anchors = await activity_urns_from_page_links(page)
+    if len(set(anchors)) >= MIN_FEED_URNS:
+        return True
+
+    blob_urns = await activity_urns_from_markup(page)
+    if len(set(blob_urns)) >= MIN_FEED_URNS:
+        return True
+
+    return False
 
 
 async def _urn_on_element(el) -> str | None:
@@ -420,6 +435,14 @@ async def collect_feed_activity_urns(
             len(embedded),
             len(from_articles),
         )
+    elif ncards == 0 and n_article == 0:
+        log.warning(
+            "⚠️  Feed degraded — %s URN(s) found but no real post cards rendered "
+            "(<article>≈0 · cards(class)≈0). Bot will try /feed/update/ detail "
+            "fallback. If this persists, re-export session state or set "
+            "LINKEDIN_CHROME_CHANNEL=chrome.",
+            len(out),
+        )
     else:
         log.info(
             "🔗 Resolved %s unseen URNs (anchors:%s markup:%s articles-scan:%s · "
@@ -451,7 +474,7 @@ async def wait_for_feed_ready(page, timeout_ms: float = 55000):
             last_exc = e
 
         if await dom_has_encoded_activity_updates(page):
-            log.info("✅ Feed detected via permalinks (activity URN in anchor href)")
+            log.info("✅ Feed content detected (cards or multiple URNs)")
             return
 
         await page.mouse.wheel(0, 900)
@@ -462,7 +485,7 @@ async def wait_for_feed_ready(page, timeout_ms: float = 55000):
             await page.wait_for_timeout(400)
 
         if await dom_has_encoded_activity_updates(page):
-            log.info("✅ Feed detected via permalinks after scroll")
+            log.info("✅ Feed content detected after scroll")
             return
 
     if last_exc:

@@ -398,6 +398,43 @@ async def _process_post(page, post, urn, min_age, max_age, persona, provider, ma
         return False
 
 
+async def _open_detail_view(page, urn: str) -> bool:
+    """
+    Navigate to /feed/update/<urn>/ as a fallback when the URN didn't hydrate
+    on the feed. Returns True iff the detail page actually loaded a post node.
+
+    Hardened against LinkedIn's redirect-loop / domcontentloaded edge cases.
+    """
+    from playwright.async_api import Error as PlaywrightError
+
+    detail_url = linkedin_feed.activity_detail_url(urn)
+    try:
+        await page.goto(detail_url, wait_until="domcontentloaded", timeout=45000)
+    except PlaywrightError as e:
+        msg = str(e)
+        if "ERR_TOO_MANY_REDIRECTS" in msg or "ERR_ABORTED" in msg:
+            log.warning(f"⚠️  detail nav redirect/abort for {urn[:50]}: {msg.splitlines()[0]}")
+        else:
+            log.warning(f"⚠️  detail nav playwright error for {urn[:50]}: {msg.splitlines()[0]}")
+        return False
+    except Exception as e:
+        log.warning(f"⚠️  detail nav unexpected error for {urn[:50]}: {e}")
+        return False
+
+    await linkedin_feed.dismiss_sticky_alerts(page)
+    try:
+        await page.wait_for_selector(
+            'article, [class*="feed-shared-update"], '
+            'button[aria-label="Comment"], button.comments-comment-box__open-button',
+            timeout=15000,
+        )
+    except Exception:
+        log.info(f"⏭️  detail page didn't render a post for {urn[:50]}")
+        return False
+    await page.wait_for_timeout(1500)
+    return True
+
+
 async def _run_feed_attempt_urn(
     page,
     urn: str,
@@ -409,20 +446,21 @@ async def _run_feed_attempt_urn(
     commented_this_round: int,
 ) -> bool:
     """Locate post on feed or /feed/update/ permalink, run comment flow, restore feed if needed."""
-    from playwright.async_api import Error as PlaywrightError
-
     opened_detail = False
     try:
         post = await linkedin_feed.scoped_post_for_urn(page, urn)
-        if not await post.count():
-            # Detail fallback is unstable in environments where LinkedIn issues
-            # redirect loops; skip this URN and keep the feed page stable.
-            log.info("⏭️  %s… not hydrated on feed, skipping detail fallback", urn[:50])
-            return False
+        feed_hydrated = (await post.count()) > 0 and await is_post_hydrated(post)
 
-        if not await post.count():
-            log.warning("⏭️  %s… not in DOM — skipping", urn[:50])
-            return False
+        if not feed_hydrated:
+            # Detail-page fallback: try opening /feed/update/<urn>/ directly.
+            log.info(f"🔗 {urn[:50]}… not hydrated on feed — trying detail page")
+            if not await _open_detail_view(page, urn):
+                return False
+            opened_detail = True
+            post = await linkedin_feed.scoped_post_on_detail_view(page, urn)
+            if not await post.count():
+                log.info(f"⏭️  {urn[:50]}… post node not found on detail page — skipping")
+                return False
 
         return await _process_post(
             page,
@@ -437,7 +475,10 @@ async def _run_feed_attempt_urn(
         )
     finally:
         if opened_detail:
-            await linkedin_feed.return_to_feed_home(page, linkedin_feed.wait_for_feed_ready)
+            try:
+                await linkedin_feed.return_to_feed_home(page, linkedin_feed.wait_for_feed_ready)
+            except Exception as e:
+                log.warning(f"⚠️  return-to-feed failed: {e}")
 
 
 async def _run_targeted(page, profile, persona, provider, min_age, max_age, max_cpr):
