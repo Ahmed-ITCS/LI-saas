@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import subprocess
 import threading
 import time
@@ -202,7 +203,7 @@ def api_bot_start(request, pk):
     runner_log = open(log_path, "a", encoding="utf-8")
     try:
         proc = subprocess.Popen(
-            ["python", bot_script],
+            [sys.executable, bot_script],
             env=env,
             stdout=runner_log,
             stderr=runner_log,
@@ -437,7 +438,7 @@ def api_bot_start_targeted(request, pk, tid):
     runner_log = open(log_path, "a", encoding="utf-8")
     try:
         proc = subprocess.Popen(
-            ["python", bot_script],
+            [sys.executable, bot_script],
             env=env,
             stdout=runner_log,
             stderr=runner_log,
@@ -508,7 +509,7 @@ def api_session_launch(request, pk):
     env["DJANGO_SETTINGS_MODULE"] = "libot.settings"
 
     proc = subprocess.Popen(
-        ["python", launcher],
+        [sys.executable, launcher],
         env=env,
         cwd=os.path.dirname(os.path.dirname(__file__)),
     )
