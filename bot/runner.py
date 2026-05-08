@@ -186,10 +186,16 @@ async def generate_comment(post_text: str, persona: str, provider: str) -> str:
     if provider == "gemini":
         try:
             from google import genai
-            from google.api_core.exceptions import ResourceExhausted
         except ImportError:
             log.error("google-genai not installed — falling back to mock")
             provider = "mock"
+        else:
+            try:
+                from google.api_core.exceptions import ResourceExhausted
+            except ImportError:
+                # google-genai works without google-api-core in some envs;
+                # keep Gemini enabled and use message-based 429 detection below.
+                ResourceExhausted = None
 
     if provider == "gemini":
         global _gemini_key_idx
@@ -207,12 +213,21 @@ async def generate_comment(post_text: str, persona: str, provider: str) -> str:
                 comment = response.text.strip()
                 log.info(f"🤖 Gemini generated comment ({len(comment)} chars)")
                 return comment
-            except ResourceExhausted as e:
-                log.warning(f"⚠️  Gemini key #{_gemini_key_idx + 1} rate-limited: {e}")
-                if rotate_gemini_key() is None:
-                    break
-                attempts += 1
             except Exception as e:
+                msg = str(e)
+                upper_msg = msg.upper()
+                is_rate_limited = (
+                    (ResourceExhausted is not None and isinstance(e, ResourceExhausted))
+                    or "RESOURCE_EXHAUSTED" in upper_msg
+                    or "RATE LIMIT" in upper_msg
+                    or "429" in msg
+                )
+                if is_rate_limited:
+                    log.warning(f"⚠️  Gemini key #{_gemini_key_idx + 1} rate-limited: {e}")
+                    if rotate_gemini_key() is None:
+                        break
+                    attempts += 1
+                    continue
                 log.error(f"❌ Gemini error: {e}")
                 break
 
