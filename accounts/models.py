@@ -167,8 +167,8 @@ class LinkedInProfile(models.Model):
     llm_provider = models.CharField(max_length=20, choices=LLM_CHOICES, default=LLM_GEMINI)
     gemini_keys  = models.TextField(blank=True)
 
-    min_post_age_minutes   = models.PositiveIntegerField(default=30)
-    max_post_age_minutes   = models.PositiveIntegerField(default=360)
+    min_post_age_minutes   = models.PositiveIntegerField(null=True, blank=True)
+    max_post_age_minutes   = models.PositiveIntegerField(null=True, blank=True)
     max_comments_per_round = models.PositiveSmallIntegerField(default=6)
     persona_prompt = models.TextField(
         default=(

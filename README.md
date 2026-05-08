@@ -7,7 +7,7 @@ Multi-user LinkedIn auto-comment bot with a dark terminal dashboard.
 - **Auth**: Sign up / login (Django built-in, open registration)
 - **Multi-profile**: Each user can add multiple LinkedIn accounts
 - **Encrypted credentials**: AES-128 via Fernet — passwords never stored in plaintext
-- **Post age filter**: Per-profile min/max age window (e.g. 30–360 min)
+- **Post age filter**: Optional per-profile min/max age window (e.g. 30–360 min). Leave either bound empty to disable that side of the filter.
 - **LLM**: Gemini with automatic key rotation on 429, or Mock fallback
 - **Bot control**: Start/Stop each profile independently
 - **Parallel mode**: Each profile runs as its own subprocess
@@ -115,8 +115,8 @@ libot/
 | LinkedIn email/password | Stored encrypted via Fernet |
 | LLM provider | Gemini (with key rotation) or Mock |
 | Gemini API keys | One per line, rotated on 429 |
-| Min post age | Skip posts newer than N minutes (default 30) |
-| Max post age | Skip posts older than N minutes (default 360) |
+| Min post age | Skip posts newer than N minutes (leave empty for no lower bound) |
+| Max post age | Skip posts older than N minutes (leave empty for no upper bound) |
 | Max comments/round | How many comments per feed scan (default 6) |
 | Persona prompt | Injected before every LLM call |
 | Run parallel | Own subprocess vs sequential |
@@ -127,7 +127,11 @@ libot/
 
 LinkedIn shows relative timestamps in the feed DOM like `"45m"`, `"1h"`, `"2h"`, `"3d"`.
 The bot parses these strings and converts to minutes before applying the min/max filter.
-Posts that can't be parsed are skipped (conservative default).
+Posts whose age can't be parsed are processed without an age check (so non-English locales
+and unusual DOMs aren't accidentally filtered out).
+
+Min/Max are both optional — leaving a field empty means "no bound on that side".
+Leaving both empty disables the post-age filter entirely.
 
 ---
 

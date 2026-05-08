@@ -210,7 +210,8 @@
         </div>
 
         <div class="pcard-age">
-          post age filter: <em>{{ p.min_post_age_minutes }}m → {{ p.max_post_age_minutes }}m</em>
+          post age filter:
+          <em>{% if p.min_post_age_minutes is not None %}{{ p.min_post_age_minutes }}m{% else %}any{% endif %} → {% if p.max_post_age_minutes is not None %}{{ p.max_post_age_minutes }}m{% else %}any{% endif %}</em>
           &nbsp;·&nbsp; max {{ p.max_comments_per_round }}/round
         </div>
 

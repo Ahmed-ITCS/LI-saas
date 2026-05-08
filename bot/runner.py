@@ -291,21 +291,21 @@ async def _process_post(page, post, urn, min_age, max_age, persona, provider, ma
     log.info(f"👀 Processing {short}...")
 
     # ── Age filter ────────────────────────────────────────────────────────────
+    # min_age / max_age may be None — meaning "no bound on this side".
     age = await get_post_age_minutes(post)
     if age is None:
         # LinkedIn frequently renders relative time in dynamic/locale-specific
         # structures; don't hard-skip a valid candidate just because age parser
         # couldn't extract it.
         log.info(f"ℹ️  {short} — could not parse age, continuing without age filter")
-    elif age < min_age:
-        log.info(f"⏭️  {short} — too fresh ({age}m < {min_age}m), skipping")
-        return False
-    elif age > max_age:
-        log.info(f"⏭️  {short} — too old ({age}m > {max_age}m), skipping")
-        mark_as_commented(urn, "", "", age)
-        return False
-
-    if age is not None:
+    else:
+        if min_age is not None and age < min_age:
+            log.info(f"⏭️  {short} — too fresh ({age}m < {min_age}m), skipping")
+            return False
+        if max_age is not None and age > max_age:
+            log.info(f"⏭️  {short} — too old ({age}m > {max_age}m), skipping")
+            mark_as_commented(urn, "", "", age)
+            return False
         log.info(f"🕐 Post age: {age}m ✓")
 
     # ── Text ─────────────────────────────────────────────────────────────────
@@ -559,7 +559,9 @@ async def run():
     log.info(f"🚀 Bot starting — profile: {profile.label} (id={PROFILE_ID})")
     log.info(f"   Mode          : {mode}")
     log.info(f"   LLM provider  : {provider}")
-    log.info(f"   Post age range: {min_age}–{max_age} min")
+    age_lo = min_age if min_age is not None else "any"
+    age_hi = max_age if max_age is not None else "any"
+    log.info(f"   Post age range: {age_lo}–{age_hi} min")
     log.info(f"   Max/round     : {max_cpr}")
     log.info(f"   Gemini keys   : {len(_gemini_keys)}")
     if provider == "gemini":

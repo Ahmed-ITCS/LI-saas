@@ -183,7 +183,7 @@
     <div class="detail-title-col">
       <div>
         <div class="detail-name">{{ profile.label }}</div>
-        <div class="detail-sub">{{ profile.get_llm_provider_display }} · age {{ profile.min_post_age_minutes }}–{{ profile.max_post_age_minutes }}m · max {{ profile.max_comments_per_round }}/round · {% if profile.run_parallel %}parallel{% else %}sequential{% endif %}</div>
+        <div class="detail-sub">{{ profile.get_llm_provider_display }} · age {% if profile.min_post_age_minutes is not None %}{{ profile.min_post_age_minutes }}{% else %}any{% endif %}–{% if profile.max_post_age_minutes is not None %}{{ profile.max_post_age_minutes }}m{% else %}any{% endif %} · max {{ profile.max_comments_per_round }}/round · {% if profile.run_parallel %}parallel{% else %}sequential{% endif %}</div>
       </div>
       <div class="status-pill {% if profile.is_running %}running{% else %}stopped{% endif %}" id="statusPill">
         <div class="pill-dot"></div>
@@ -203,7 +203,7 @@
   <div class="mini-stats">
     <div class="mstat"><div class="mstat-label">// total comments</div><div class="mstat-val c-accent" id="ms-total">—</div></div>
     <div class="mstat"><div class="mstat-label">// today</div><div class="mstat-val c-green" id="ms-today">—</div></div>
-    <div class="mstat"><div class="mstat-label">// post age window</div><div class="mstat-val c-sm">{{ profile.min_post_age_minutes }}m – {{ profile.max_post_age_minutes }}m</div></div>
+    <div class="mstat"><div class="mstat-label">// post age window</div><div class="mstat-val c-sm">{% if profile.min_post_age_minutes is not None %}{{ profile.min_post_age_minutes }}m{% else %}any{% endif %} – {% if profile.max_post_age_minutes is not None %}{{ profile.max_post_age_minutes }}m{% else %}any{% endif %}</div></div>
     <div class="mstat"><div class="mstat-label">// pid</div><div class="mstat-val c-sm" id="ms-pid">{{ profile.pid|default:"—" }}</div></div>
   </div>
 
