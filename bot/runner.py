@@ -230,6 +230,41 @@ async def generate_comment(post_text: str, persona: str, provider: str) -> str:
     return mocks[len(post_text.strip()) % len(mocks)]
 
 # ── Playwright helpers ────────────────────────────────────────────────────────
+async def is_post_hydrated(post) -> bool:
+    """
+    True only if the resolved element is a real feed post card with comment UI.
+    LinkedIn sometimes serves a stripped feed where only permalink anchors exist
+    (no <article>/feed-shared-update wrappers); in that case the URN resolver
+    falls back to a bare <a> element and we should NOT try to comment on it.
+    """
+    try:
+        tag = (await post.evaluate("el => el.tagName")).lower()
+    except Exception:
+        return False
+    if tag == "a":
+        return False
+    try:
+        cbtn = post.locator(
+            'button[aria-label="Comment"], '
+            'button[aria-label*="Comment"][aria-expanded], '
+            "button.comments-comment-box__open-button"
+        ).first
+        if await cbtn.count():
+            return True
+    except Exception:
+        pass
+    try:
+        wrap = post.locator(
+            'xpath=self::*[contains(@class,"feed-shared-update") '
+            'or contains(@class,"update-components")]'
+        ).first
+        if await wrap.count():
+            return True
+    except Exception:
+        pass
+    return False
+
+
 async def get_post_text(post) -> str:
     selectors = [
         ".feed-shared-update-v2__description .break-words",
@@ -290,6 +325,13 @@ async def _process_post(page, post, urn, min_age, max_age, persona, provider, ma
     short = urn[:50]
     log.info(f"👀 Processing {short}...")
 
+    # ── Hydration check ───────────────────────────────────────────────────────
+    # Skip without persisting if the URN resolved to a bare anchor / unhydrated
+    # placeholder. Marking it would block retries after the feed re-renders.
+    if not await is_post_hydrated(post):
+        log.info(f"⏭️  {short} — post not hydrated in feed (no card/comment UI), skipping")
+        return False
+
     # ── Age filter ────────────────────────────────────────────────────────────
     # min_age / max_age may be None — meaning "no bound on this side".
     age = await get_post_age_minutes(post)
@@ -311,8 +353,8 @@ async def _process_post(page, post, urn, min_age, max_age, persona, provider, ma
     # ── Text ─────────────────────────────────────────────────────────────────
     post_text = await get_post_text(post)
     if not post_text:
-        log.info(f"⏭️  {short} — no text, skipping")
-        mark_as_commented(urn, "", "", age)
+        # Don't persist — text may simply not be hydrated yet. Retry next round.
+        log.info(f"⏭️  {short} — no text extracted, skipping (will retry later)")
         return False
 
     if is_content_already_commented(post_text):
