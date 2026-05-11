@@ -75,13 +75,20 @@ _gemini_key_idx = 0
 _gemini_keys: list[str] = []
 
 def current_gemini_key() -> str | None:
-    return _gemini_keys[_gemini_key_idx] if _gemini_keys else None
+    if not _gemini_keys:
+        return None
+    # After the last key hits rate limits, rotate_gemini_key() leaves the index
+    # at len(_gemini_keys); indexing would raise IndexError.
+    if _gemini_key_idx < 0 or _gemini_key_idx >= len(_gemini_keys):
+        return None
+    return _gemini_keys[_gemini_key_idx]
 
 def rotate_gemini_key() -> str | None:
     global _gemini_key_idx
     _gemini_key_idx += 1
     if _gemini_key_idx >= len(_gemini_keys):
         log.error("🔴 All Gemini API keys exhausted")
+        _gemini_key_idx = len(_gemini_keys)  # stable sentinel: current_gemini_key() returns None
         return None
     log.warning(f"🔁 Rotated to Gemini key #{_gemini_key_idx + 1}")
     return _gemini_keys[_gemini_key_idx]
@@ -176,6 +183,23 @@ async def get_post_age_minutes(post) -> int | None:
 
 # ── LLM ───────────────────────────────────────────────────────────────────────
 async def generate_comment(post_text: str, persona: str, provider: str) -> str:
+    if provider != "gemini":
+        log.error(f"Unsupported LLM provider {provider!r} — only gemini is supported")
+        return ""
+
+    try:
+        from google import genai
+    except ImportError:
+        log.error("google-genai not installed — cannot generate comments")
+        return ""
+
+    try:
+        from google.api_core.exceptions import ResourceExhausted
+    except ImportError:
+        # google-genai works without google-api-core in some envs;
+        # keep Gemini enabled and use message-based 429 detection below.
+        ResourceExhausted = None
+
     prompt = (
         f"{persona} "
         "Write a short (exactly 1-2 sentences), professional, human-sounding LinkedIn comment. "
@@ -183,66 +207,48 @@ async def generate_comment(post_text: str, persona: str, provider: str) -> str:
     )
     full_prompt = f"{prompt}\n\nPost:\n{post_text[:700]}"
 
-    if provider == "gemini":
+    if not _gemini_keys:
+        log.error("No Gemini API keys configured — cannot generate comments")
+        return ""
+
+    global _gemini_key_idx
+    attempts = 0
+    while attempts < len(_gemini_keys):
+        key = current_gemini_key()
+        if not key:
+            break
         try:
-            from google import genai
-        except ImportError:
-            log.error("google-genai not installed — falling back to mock")
-            provider = "mock"
-        else:
-            try:
-                from google.api_core.exceptions import ResourceExhausted
-            except ImportError:
-                # google-genai works without google-api-core in some envs;
-                # keep Gemini enabled and use message-based 429 detection below.
-                ResourceExhausted = None
-
-    if provider == "gemini":
-        global _gemini_key_idx
-        attempts = 0
-        while attempts < len(_gemini_keys):
-            key = current_gemini_key()
-            if not key:
+            client = genai.Client(api_key=key)
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=full_prompt,
+            )
+            raw = (response.text or "").strip()
+            if not raw:
+                log.error("Gemini returned an empty comment")
                 break
-            try:
-                client = genai.Client(api_key=key)
-                response = client.models.generate_content(
-                    model=GEMINI_MODEL,
-                    contents=full_prompt,
-                )
-                comment = response.text.strip()
-                log.info(f"🤖 Gemini generated comment ({len(comment)} chars)")
-                return comment
-            except Exception as e:
-                msg = str(e)
-                upper_msg = msg.upper()
-                is_rate_limited = (
-                    (ResourceExhausted is not None and isinstance(e, ResourceExhausted))
-                    or "RESOURCE_EXHAUSTED" in upper_msg
-                    or "RATE LIMIT" in upper_msg
-                    or "429" in msg
-                )
-                if is_rate_limited:
-                    log.warning(f"⚠️  Gemini key #{_gemini_key_idx + 1} rate-limited: {e}")
-                    if rotate_gemini_key() is None:
-                        break
-                    attempts += 1
-                    continue
-                log.error(f"❌ Gemini error: {e}")
-                break
+            log.info(f"🤖 Gemini generated comment ({len(raw)} chars)")
+            return raw
+        except Exception as e:
+            msg = str(e)
+            upper_msg = msg.upper()
+            is_rate_limited = (
+                (ResourceExhausted is not None and isinstance(e, ResourceExhausted))
+                or "RESOURCE_EXHAUSTED" in upper_msg
+                or "RATE LIMIT" in upper_msg
+                or "429" in msg
+            )
+            if is_rate_limited:
+                log.warning(f"⚠️  Gemini key #{_gemini_key_idx + 1} rate-limited: {e}")
+                if rotate_gemini_key() is None:
+                    break
+                attempts += 1
+                continue
+            log.error(f"❌ Gemini error: {e}")
+            break
 
-    log.warning("⚠️  Using mock comment")
-    mocks = [
-        "Great insights — the point about scalability resonates with my experience building distributed systems.",
-        "This is a nuanced take that's easy to overlook. Thanks for putting it so clearly.",
-        "Solid perspective. The trade-off you described is exactly what teams underestimate in early architecture decisions.",
-        "Appreciate the breakdown. This aligns with what I've seen when transitioning monoliths to microservices.",
-        "Well articulated. The devil really is in the operational complexity, not just the initial implementation.",
-        "Interesting angle. I've found that communication overhead is often the hidden cost teams miss early on.",
-        "This resonates. Getting the boundaries right from the start saves so much refactoring down the line.",
-        "Good point. The observability piece is often the last thing teams plan for and the first thing they wish they had.",
-    ]
-    return mocks[len(post_text.strip()) % len(mocks)]
+    log.error("Could not generate a comment (keys exhausted, errors, or empty response)")
+    return ""
 
 # ── Playwright helpers ────────────────────────────────────────────────────────
 async def is_post_hydrated(post) -> bool:
@@ -380,6 +386,9 @@ async def _process_post(page, post, urn, min_age, max_age, persona, provider, ma
     # ── Generate ──────────────────────────────────────────────────────────────
     log.info(f"✍️  Generating comment for {short}")
     comment = await generate_comment(post_text, persona, provider)
+    if not (comment or "").strip():
+        log.warning(f"⏭️  {short} — no comment generated, skipping")
+        return False
     log.info(f'💬 Comment: "{comment}"')
 
     # ── Interact ──────────────────────────────────────────────────────────────

@@ -162,8 +162,7 @@ class LinkedInProfile(models.Model):
     li_password = models.TextField()
 
     LLM_GEMINI = "gemini"
-    LLM_MOCK   = "mock"
-    LLM_CHOICES = [(LLM_GEMINI, "Gemini"), (LLM_MOCK, "Mock")]
+    LLM_CHOICES = [(LLM_GEMINI, "Gemini")]
     llm_provider = models.CharField(max_length=20, choices=LLM_CHOICES, default=LLM_GEMINI)
     gemini_keys  = models.TextField(blank=True)
 
