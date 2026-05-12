@@ -189,6 +189,7 @@ async def generate_comment(post_text: str, persona: str, provider: str) -> str:
 
     try:
         from google import genai
+        from google.genai import errors as genai_errors
     except ImportError:
         log.error("google-genai not installed — cannot generate comments")
         return ""
@@ -222,18 +223,33 @@ async def generate_comment(post_text: str, persona: str, provider: str) -> str:
         )
         _gemini_key_idx = 0
 
+    nkeys = len(_gemini_keys)
+    key_slot = _gemini_key_idx + 1 if _gemini_key_idx < nkeys else "?"
+    log.info(
+        "🤖 Gemini request — %s key(s), slot %s/%s, model=%s, prompt_len=%s",
+        nkeys,
+        key_slot,
+        nkeys,
+        GEMINI_MODEL,
+        len(full_prompt),
+    )
+
+    last_problem: str | None = None
     attempts = 0
-    while attempts < len(_gemini_keys):
+    while attempts < nkeys:
         key = current_gemini_key()
         if not key:
-            log.error(
-                "No Gemini API key available at current index — "
+            last_problem = (
+                f"no key at index {_gemini_key_idx} ({nkeys} key(s) configured) — "
                 "check gemini_keys on the profile"
             )
             break
         try:
             client = genai.Client(api_key=key)
-            response = client.models.generate_content(
+            # google-genai is synchronous; run in a worker thread so the Playwright
+            # asyncio loop is not blocked for whole request latency.
+            response = await asyncio.to_thread(
+                client.models.generate_content,
                 model=GEMINI_MODEL,
                 contents=full_prompt,
             )
@@ -254,16 +270,22 @@ async def generate_comment(post_text: str, persona: str, provider: str) -> str:
                             dbg.append(f"finish_message={fm!r}")
                 except Exception:
                     pass
-                suffix = f" — {'; '.join(dbg)}" if dbg else ""
-                log.error(f"Gemini returned an empty comment{suffix}")
+                suffix = f" ({'; '.join(dbg)})" if dbg else ""
+                last_problem = f"empty model output{suffix}"
                 break
             log.info(f"🤖 Gemini generated comment ({len(raw)} chars)")
             return raw
         except Exception as e:
             msg = str(e)
             upper_msg = msg.upper()
+            code = getattr(e, "code", None)
             is_rate_limited = (
                 (ResourceExhausted is not None and isinstance(e, ResourceExhausted))
+                or (
+                    isinstance(e, genai_errors.ClientError)
+                    and code == 429
+                )
+                or code == 429
                 or "RESOURCE_EXHAUSTED" in upper_msg
                 or "RATE LIMIT" in upper_msg
                 or "429" in msg
@@ -271,13 +293,18 @@ async def generate_comment(post_text: str, persona: str, provider: str) -> str:
             if is_rate_limited:
                 log.warning(f"⚠️  Gemini key #{_gemini_key_idx + 1} rate-limited: {e}")
                 if rotate_gemini_key() is None:
+                    last_problem = "all Gemini API keys rate-limited for this request"
                     break
                 attempts += 1
                 continue
-            log.error(f"❌ Gemini error: {e}")
+            last_problem = f"{type(e).__name__}: {e}"
+            log.error("❌ Gemini error: %s", e)
             break
 
-    log.error("Could not generate a comment (keys exhausted, errors, or empty response)")
+    log.error(
+        "Could not generate a comment — %s",
+        last_problem or "no detail (loop exited unexpectedly; check Gemini keys and model name)",
+    )
     return ""
 
 # ── Playwright helpers ────────────────────────────────────────────────────────
