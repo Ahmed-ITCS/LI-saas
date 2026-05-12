@@ -20,11 +20,8 @@ db.sqlite3
 *.pyo
 
 # Environment variables
-.env
-.env.*
 
 # IDE/editor
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -57,3 +54,4 @@ node_modules/
 # Misc
 *.bak
 *.tmp
+config.bat
