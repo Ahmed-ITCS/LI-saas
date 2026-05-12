@@ -212,10 +212,24 @@ async def generate_comment(post_text: str, persona: str, provider: str) -> str:
         return ""
 
     global _gemini_key_idx
+    # After the last key is rate-limited, rotate_gemini_key() leaves the index at
+    # len(keys). Without resetting, every later post skips the API entirely
+    # (current_gemini_key() is None) and only logs the generic failure below.
+    if _gemini_key_idx >= len(_gemini_keys):
+        log.info(
+            "↩️ Gemini key index was past end (keys were exhausted earlier); "
+            "retrying from first key (quotas may have recovered)"
+        )
+        _gemini_key_idx = 0
+
     attempts = 0
     while attempts < len(_gemini_keys):
         key = current_gemini_key()
         if not key:
+            log.error(
+                "No Gemini API key available at current index — "
+                "check gemini_keys on the profile"
+            )
             break
         try:
             client = genai.Client(api_key=key)
@@ -225,7 +239,23 @@ async def generate_comment(post_text: str, persona: str, provider: str) -> str:
             )
             raw = (response.text or "").strip()
             if not raw:
-                log.error("Gemini returned an empty comment")
+                dbg: list[str] = []
+                try:
+                    pf = getattr(response, "prompt_feedback", None)
+                    if pf is not None:
+                        dbg.append(f"prompt_feedback={pf}")
+                    cands = getattr(response, "candidates", None) or []
+                    if cands:
+                        fr = getattr(cands[0], "finish_reason", None)
+                        if fr is not None:
+                            dbg.append(f"finish_reason={fr}")
+                        fm = getattr(cands[0], "finish_message", None)
+                        if fm:
+                            dbg.append(f"finish_message={fm!r}")
+                except Exception:
+                    pass
+                suffix = f" — {'; '.join(dbg)}" if dbg else ""
+                log.error(f"Gemini returned an empty comment{suffix}")
                 break
             log.info(f"🤖 Gemini generated comment ({len(raw)} chars)")
             return raw
